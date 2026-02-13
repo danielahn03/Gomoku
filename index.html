@@ -636,6 +636,13 @@
           <span class="vol-label" id="sfx-vol-label">60%</span>
         </div>
       </div>
+      <div class="settings-row">
+        <span>판 크기</span>
+        <select id="board-size-select" style="font-family:'Noto Serif KR',serif;padding:5px 10px;background:#3a2a18;color:var(--paper-cream);border:1px solid rgba(201,168,76,0.4);border-radius:4px;">
+          <option value="15">오목판 (15×15)</option>
+          <option value="19">바둑판 (19×19)</option>
+        </select>
+      </div>
     </div>
     <button class="back-btn" onclick="closeSettings()">뒤로</button>
   </div>
@@ -693,7 +700,7 @@
     const DIFF_NAMES = ['초보', '쉬움', '보통', '어려움'];
 
     // ===== GAME STATE =====
-    const boardSize = 15;
+    let boardSize = 15;
     let cellSize, padding, canvasSize;
     let canvas, ctx;
     let gameState = null;
@@ -841,6 +848,7 @@
         sfxEnabled = s.sfxEnabled !== undefined ? s.sfxEnabled : true;
         bgmVolume = s.bgmVolume !== undefined ? s.bgmVolume : 0.4;
         sfxVolume = s.sfxVolume !== undefined ? s.sfxVolume : 0.6;
+        boardSize = s.boardSize || 15;
       }
       document.getElementById('bgm-toggle').checked = bgmEnabled;
       document.getElementById('sfx-toggle').checked = sfxEnabled;
@@ -848,11 +856,12 @@
       document.getElementById('bgm-vol-label').textContent = Math.round(bgmVolume * 100) + '%';
       document.getElementById('sfx-volume').value = Math.round(sfxVolume * 100);
       document.getElementById('sfx-vol-label').textContent = Math.round(sfxVolume * 100) + '%';
+      document.getElementById('board-size-select').value = boardSize;
     }
 
     function saveSettings() {
       localStorage.setItem('gomoku_settings', JSON.stringify({
-        bgmEnabled, sfxEnabled, bgmVolume, sfxVolume
+        bgmEnabled, sfxEnabled, bgmVolume, sfxVolume, boardSize
       }));
     }
 
@@ -876,6 +885,10 @@
       document.getElementById('sfx-volume').addEventListener('input', function() {
         sfxVolume = this.value / 100;
         document.getElementById('sfx-vol-label').textContent = this.value + '%';
+        saveSettings();
+      });
+      document.getElementById('board-size-select').addEventListener('change', function() {
+        boardSize = parseInt(this.value);
         saveSettings();
       });
     }
@@ -1040,7 +1053,11 @@
     }
 
     function getStarPoints() {
-      return [[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]];
+      if (boardSize === 15) {
+        return [[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]];
+      } else {
+        return [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+      }
     }
 
     function drawStone(x, y, radius, player, alpha) {
