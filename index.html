@@ -970,11 +970,17 @@
 
     function updateForbiddenCache() {
       cachedForbiddenMoves = [];
+      // Only compute when it's black's turn (or about to be)
+      // Skip during AI thinking to avoid board corruption
+      if (!gameState || gameState.isAIThinking) return;
       if (gameState.moveCount < 4) return; // Not enough stones for forbidden patterns
+      // Only calculate if next turn is black
+      const nextPlayer = gameState.currentPlayer;
+      if (nextPlayer !== BLACK) return;
       for (let row = 0; row < boardSize; row++) {
         for (let col = 0; col < boardSize; col++) {
           if (gameState.board[row][col] !== EMPTY) continue;
-          if (!hasNeighbor(row, col, 2)) continue; // Skip isolated cells for speed
+          if (!hasNeighbor(row, col, 2)) continue;
           if (isForbiddenMove(row, col, BLACK)) {
             cachedForbiddenMoves.push({ row, col });
           }
@@ -1053,30 +1059,62 @@
       switchTurn();
 
       if (gameState.mode === 'ai' && gameState.currentPlayer === WHITE) {
-        gameState.isAIThinking = true;
-        document.getElementById('ai-thinking').classList.add('show');
-        document.getElementById('btn-undo').disabled = true;
-        setTimeout(() => {
-          const move = getAIMove();
-          gameState.isAIThinking = false;
-          document.getElementById('ai-thinking').classList.remove('show');
-
-          if (move) {
-            animateAIStone(move.row, move.col, () => {
-              if (checkWin(move.row, move.col, WHITE)) {
-                endGame(WHITE);
-                return;
-              }
-              if (gameState.moveCount >= boardSize * boardSize) {
-                endGame(0);
-                return;
-              }
-              switchTurn();
-              document.getElementById('btn-undo').disabled = false;
-            });
-          }
-        }, 300 + Math.random() * 400);
+        triggerAIMove();
       }
+    }
+
+    function triggerAIMove() {
+      if (gameState.isGameOver) return;
+      gameState.isAIThinking = true;
+      document.getElementById('ai-thinking').classList.add('show');
+      document.getElementById('btn-undo').disabled = true;
+
+      // Use requestAnimationFrame + setTimeout to guarantee UI update before heavy computation
+      requestAnimationFrame(() => { setTimeout(() => {
+        let move = null;
+        try {
+          move = getAIMove();
+        } catch (e) {
+          console.error('AI error:', e);
+        }
+
+        gameState.isAIThinking = false;
+        document.getElementById('ai-thinking').classList.remove('show');
+
+        if (!move) {
+          // AI couldn't find a move - fallback to any empty cell
+          for (let r = 0; r < boardSize; r++) {
+            for (let c = 0; c < boardSize; c++) {
+              if (gameState.board[r][c] === EMPTY) {
+                move = { row: r, col: c };
+                break;
+              }
+            }
+            if (move) break;
+          }
+        }
+
+        if (!move) {
+          // Board is full - draw
+          endGame(0);
+          return;
+        }
+
+        animateAIStone(move.row, move.col, () => {
+          if (checkWin(move.row, move.col, WHITE)) {
+            endGame(WHITE);
+            return;
+          }
+          if (gameState.moveCount >= boardSize * boardSize) {
+            endGame(0);
+            return;
+          }
+          switchTurn();
+          updateForbiddenCache();
+          drawBoard();
+          document.getElementById('btn-undo').disabled = false;
+        });
+      }, 30); });
     }
 
     function placeStone(row, col, player) {
@@ -1719,7 +1757,7 @@
         hScore: evaluatePosition(m.row, m.col, isMaximizing ? WHITE : BLACK)
       }));
       scored.sort((a, b) => b.hScore - a.hScore);
-      const topMoves = scored.slice(0, 10);
+      const topMoves = scored.slice(0, 8);
 
       if (isMaximizing) {
         let maxEval = -Infinity;
@@ -1763,14 +1801,14 @@
         hScore: evaluatePosition(m.row, m.col, WHITE) * 1.1 + evaluatePosition(m.row, m.col, BLACK)
       }));
       scored.sort((a, b) => b.hScore - a.hScore);
-      const topMoves = scored.slice(0, 20);
+      const topMoves = scored.slice(0, 12);
 
       let bestScore = -Infinity;
       let bestMove = topMoves[0];
 
       for (const move of topMoves) {
         gameState.board[move.row][move.col] = WHITE;
-        const score = minimaxHard(1, 4, false, -Infinity, Infinity, move.row, move.col, WHITE);
+        const score = minimaxHard(1, 3, false, -Infinity, Infinity, move.row, move.col, WHITE);
         gameState.board[move.row][move.col] = EMPTY;
 
         if (score > bestScore) {
@@ -1787,23 +1825,19 @@
         return lastPlayer === WHITE ? 1000000 - depth : -1000000 + depth;
       }
 
-      if (depth >= maxDepth) return evaluateBoardAdvanced();
+      if (depth >= maxDepth) return evaluateBoard();
 
       const player = isMaximizing ? WHITE : BLACK;
 
-      // Immediate win check for current player
-      const winM = findWinningMove(player);
-      if (winM) {
-        return isMaximizing ? 900000 - depth : -900000 + depth;
-      }
-
       const candidates = getCandidateMoves(2);
+      // At deeper depths, use faster scoring
+      const maxCandidates = depth <= 1 ? 8 : 5;
       const scored = candidates.map(m => ({
         ...m,
-        hScore: evaluatePosition(m.row, m.col, player) + evaluatePosition(m.row, m.col, player === WHITE ? BLACK : WHITE) * 0.8
+        hScore: evaluatePosition(m.row, m.col, player)
       }));
       scored.sort((a, b) => b.hScore - a.hScore);
-      const topMoves = scored.slice(0, depth <= 1 ? 12 : depth <= 2 ? 8 : 5);
+      const topMoves = scored.slice(0, maxCandidates);
 
       if (isMaximizing) {
         let maxEval = -Infinity;
