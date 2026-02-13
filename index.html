@@ -1824,27 +1824,13 @@
     }
 
     // --- Beginner AI ---
+    // 오목의 기본은 함: 연결하고 막고. 하지만 가끔 실수하고 깊게 안 읽음.
     function aiMoveBeginner() {
-      // 50% chance to take a winning move
-      const winMove = findWinningMove(WHITE);
-      if (winMove && Math.random() < 0.5) return winMove;
-
-      // 60% chance to block opponent's winning move
-      const blockMove = findWinningMove(BLACK);
-      if (blockMove && Math.random() < 0.6) return blockMove;
-
-      // Random move near existing stones
-      const candidates = getCandidateMoves(2);
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    // --- Easy AI ---
-    function aiMoveEasy() {
       // Always take winning move
       const winMove = findWinningMove(WHITE);
       if (winMove) return winMove;
 
-      // Always block opponent winning move
+      // Always block opponent's winning move
       const blockMove = findWinningMove(BLACK);
       if (blockMove) return blockMove;
 
@@ -1855,9 +1841,41 @@
       for (const move of candidates) {
         const attackScore = evaluatePosition(move.row, move.col, WHITE);
         const defendScore = evaluatePosition(move.row, move.col, BLACK);
-        let score = attackScore + defendScore * 0.8;
-        // Add noise for easy difficulty
-        score *= (0.7 + Math.random() * 0.6);
+        // 공격 위주, 방어를 좀 소홀히 함
+        let score = attackScore * 1.0 + defendScore * 0.5;
+        // 큰 노이즈: 가끔 엉뚱한 수를 둠
+        score *= (0.5 + Math.random() * 1.0);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMoves = [move];
+        } else if (Math.abs(score - bestScore) < 50) {
+          bestMoves.push(move);
+        }
+      }
+
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    // --- Easy AI ---
+    // 확실히 오목을 둠. 공방 균형. 약간의 노이즈.
+    function aiMoveEasy() {
+      const winMove = findWinningMove(WHITE);
+      if (winMove) return winMove;
+
+      const blockMove = findWinningMove(BLACK);
+      if (blockMove) return blockMove;
+
+      const candidates = getCandidateMoves(2);
+      let bestScore = -1;
+      let bestMoves = [];
+
+      for (const move of candidates) {
+        const attackScore = evaluatePosition(move.row, move.col, WHITE);
+        const defendScore = evaluatePosition(move.row, move.col, BLACK);
+        let score = attackScore + defendScore * 0.9;
+        // 작은 노이즈: 가끔 차선을 선택
+        score *= (0.85 + Math.random() * 0.3);
 
         if (score > bestScore) {
           bestScore = score;
@@ -1871,6 +1889,7 @@
     }
 
     // --- Normal AI (Minimax depth 2) ---
+    // 노이즈 없이 정확한 휴리스틱 + 1수 앞 읽기
     function aiMoveNormal() {
       const winMove = findWinningMove(WHITE);
       if (winMove) return winMove;
@@ -1878,10 +1897,9 @@
       if (blockMove) return blockMove;
 
       const candidates = getCandidateMoves(2);
-      // Score and sort candidates for better pruning
       const scored = candidates.map(m => ({
         ...m,
-        hScore: evaluatePosition(m.row, m.col, WHITE) + evaluatePosition(m.row, m.col, BLACK) * 0.9
+        hScore: evaluatePosition(m.row, m.col, WHITE) + evaluatePosition(m.row, m.col, BLACK)
       }));
       scored.sort((a, b) => b.hScore - a.hScore);
       const topMoves = scored.slice(0, 15);
