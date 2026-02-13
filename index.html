@@ -348,6 +348,11 @@
       background: rgba(255,255,255,0.08);
       border-color: rgba(201,168,76,0.3);
     }
+    .menu-icon-btn {
+      font-size: 1.1em;
+      padding: 4px 10px;
+      line-height: 1;
+    }
 
     .stone-icon {
       display: inline-block;
@@ -664,7 +669,7 @@
   <div id="game-screen" class="screen">
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class="icon-btn" id="btn-back" onclick="confirmBackToMenu()">메인</button>
+        <button class="icon-btn menu-icon-btn" id="btn-menu" onclick="openPauseMenu()">☰</button>
         <button class="icon-btn" id="btn-undo" onclick="undoMove()">무르기</button>
       </div>
       <div class="top-bar-center">
@@ -854,9 +859,6 @@
       }
     }
 
-    function confirmBackToMenu() {
-      openPauseMenu();
-    }
 
     function backToMenuFromResult() {
       document.getElementById('result-overlay').classList.remove('active');
