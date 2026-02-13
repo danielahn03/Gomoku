@@ -49,6 +49,19 @@
     }
     .screen.active { display: flex; }
 
+    /* Overlays (pause, result) - same layout but independent of screen switching */
+    .overlay {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    .overlay.active { display: flex; }
+
     /* ===== BACKGROUND PATTERN ===== */
     .oriental-bg {
       background:
@@ -670,7 +683,7 @@
   </div>
 
   <!-- ===== PAUSE OVERLAY ===== -->
-  <div id="pause-overlay" class="screen">
+  <div id="pause-overlay" class="overlay">
     <div class="pause-content fade-in">
       <div class="pause-title">일시정지</div>
       <div class="pause-btns">
@@ -683,7 +696,7 @@
   </div>
 
   <!-- ===== RESULT OVERLAY ===== -->
-  <div id="result-overlay" class="screen">
+  <div id="result-overlay" class="overlay">
     <div class="result-content fade-in">
       <h2 id="result-title" class="win-text">승리!</h2>
       <p id="result-subtitle">축하합니다</p>
@@ -729,18 +742,35 @@
       bindSettingsEvents();
       setupCanvasEvents();
 
-      // ESC key to open/close pause menu
+      // ESC key handler
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
-          const gameScreenActive = document.getElementById('game-screen').classList.contains('active');
-          const pauseActive = document.getElementById('pause-overlay').classList.contains('active');
-          const resultActive = document.getElementById('result-overlay').classList.contains('active');
 
-          if (pauseActive) {
+          // 1. 일시정지 열려있으면 → 닫기
+          if (isPaused) {
             resumeGame();
-          } else if (gameScreenActive && !resultActive && gameState && !gameState.isGameOver) {
+            return;
+          }
+
+          // 2. 난이도 선택 화면이면 → 메인 메뉴로
+          if (document.getElementById('difficulty-select').classList.contains('active')) {
+            showScreen('main-menu');
+            return;
+          }
+
+          // 3. 설정 화면이면 → 뒤로
+          if (document.getElementById('settings-screen').classList.contains('active')) {
+            closeSettings();
+            return;
+          }
+
+          // 4. 게임 화면에서 (결과 안 떠있을 때) → 일시정지 열기
+          if (document.getElementById('game-screen').classList.contains('active')
+              && !document.getElementById('result-overlay').classList.contains('active')
+              && gameState && !gameState.isGameOver) {
             openPauseMenu();
+            return;
           }
         }
       });
@@ -800,6 +830,7 @@
 
     function settingsFromPause() {
       pauseReturnToSettings = true;
+      isPaused = false;
       document.getElementById('pause-overlay').classList.remove('active');
       showScreen('settings-screen');
     }
