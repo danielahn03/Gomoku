@@ -531,12 +531,6 @@
       border-color: rgba(255,100,100,0.6);
       background: rgba(178,34,34,0.2);
     }
-    .pause-divider {
-      width: 60%;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.25), transparent);
-      margin: 5px auto;
-    }
 
     /* ===== FADE ANIMATION ===== */
     .fade-in {
@@ -681,10 +675,8 @@
       <div class="pause-title">일시정지</div>
       <div class="pause-btns">
         <button class="pause-btn primary" onclick="resumeGame()">계속</button>
-        <div class="pause-divider"></div>
         <button class="pause-btn" onclick="restartFromPause()">다시하기</button>
         <button class="pause-btn" onclick="settingsFromPause()">설정</button>
-        <div class="pause-divider"></div>
         <button class="pause-btn danger" onclick="mainMenuFromPause()">메인메뉴</button>
       </div>
     </div>
