@@ -1,0 +1,2278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>오목 - Gomoku</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&display=swap');
+
+    /* ===== RESET & BASE ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Serif KR', serif;
+      background: #2a1f14;
+      color: #F5E6C8;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* ===== CSS VARIABLES ===== */
+    :root {
+      --wood-light: #D4A76A;
+      --wood-mid: #C4944A;
+      --wood-dark: #8B6914;
+      --wood-bg: #B8863A;
+      --board-line: #4A3520;
+      --gold-accent: #C9A84C;
+      --ink-black: #1a1008;
+      --paper-cream: #F5E6C8;
+      --red-accent: #B22222;
+      --dark-bg: #2a1f14;
+      --btn-bg: linear-gradient(180deg, #C4944A 0%, #A07030 100%);
+      --btn-hover: linear-gradient(180deg, #D4A76A 0%, #B8863A 100%);
+    }
+
+    /* ===== SCREEN CONTAINER ===== */
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    .screen.active { display: flex; }
+
+    /* ===== BACKGROUND PATTERN ===== */
+    .oriental-bg {
+      background:
+        radial-gradient(circle at 25% 25%, rgba(201,168,76,0.05) 1px, transparent 1px),
+        radial-gradient(circle at 75% 75%, rgba(201,168,76,0.05) 1px, transparent 1px),
+        linear-gradient(135deg, #3a2a18 0%, #2a1f14 50%, #3a2a18 100%);
+      background-size: 30px 30px, 30px 30px, 100% 100%;
+    }
+
+    /* ===== TRADITIONAL CORNER DECORATIONS ===== */
+    .corner-frame {
+      position: relative;
+      padding: 40px;
+    }
+    .corner-frame::before,
+    .corner-frame::after {
+      content: '';
+      position: absolute;
+      width: 30px; height: 30px;
+      border-color: var(--gold-accent);
+      border-style: solid;
+    }
+    .corner-frame::before {
+      top: 10px; left: 10px;
+      border-width: 2px 0 0 2px;
+    }
+    .corner-frame::after {
+      top: 10px; right: 10px;
+      border-width: 2px 2px 0 0;
+    }
+    .corner-frame .corner-bottom-left,
+    .corner-frame .corner-bottom-right {
+      position: absolute;
+      width: 30px; height: 30px;
+      border-color: var(--gold-accent);
+      border-style: solid;
+    }
+    .corner-bottom-left {
+      bottom: 10px; left: 10px;
+      border-width: 0 0 2px 2px;
+    }
+    .corner-bottom-right {
+      bottom: 10px; right: 10px;
+      border-width: 0 2px 2px 0;
+    }
+
+    /* ===== MAIN MENU ===== */
+    #main-menu {
+      gap: 20px;
+    }
+    .menu-title {
+      font-size: 4em;
+      font-weight: 900;
+      color: var(--paper-cream);
+      text-shadow:
+        3px 3px 6px rgba(0,0,0,0.7),
+        0 0 30px rgba(201,168,76,0.3),
+        0 0 60px rgba(201,168,76,0.1);
+      letter-spacing: 0.15em;
+      margin-bottom: 5px;
+    }
+    .menu-subtitle {
+      font-size: 1.1em;
+      color: var(--gold-accent);
+      letter-spacing: 0.3em;
+      margin-bottom: 30px;
+      opacity: 0.8;
+    }
+    .menu-divider {
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-accent), transparent);
+      margin-bottom: 30px;
+    }
+
+    /* ===== BUTTONS ===== */
+    .menu-btn {
+      width: 220px;
+      padding: 16px 0;
+      font-family: 'Noto Serif KR', serif;
+      font-size: 1.15em;
+      font-weight: 700;
+      color: var(--paper-cream);
+      background: var(--btn-bg);
+      border: 1.5px solid var(--gold-accent);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      margin: 6px 0;
+    }
+    .menu-btn:hover {
+      background: var(--btn-hover);
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 15px rgba(201,168,76,0.2);
+    }
+    .menu-btn:active {
+      transform: scale(0.97);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    .back-btn {
+      margin-top: 20px;
+      padding: 10px 30px;
+      font-family: 'Noto Serif KR', serif;
+      font-size: 0.95em;
+      color: var(--paper-cream);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .back-btn:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: var(--gold-accent);
+    }
+
+    /* ===== DIFFICULTY SELECT ===== */
+    #difficulty-select h2 {
+      font-size: 1.8em;
+      margin-bottom: 30px;
+      color: var(--paper-cream);
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    .difficulty-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      max-width: 400px;
+      padding: 0 20px;
+    }
+    .diff-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 15px;
+      background: linear-gradient(180deg, rgba(196,148,74,0.2) 0%, rgba(160,112,48,0.15) 100%);
+      border: 1.5px solid rgba(201,168,76,0.3);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: 'Noto Serif KR', serif;
+      color: var(--paper-cream);
+    }
+    .diff-card:hover {
+      background: linear-gradient(180deg, rgba(196,148,74,0.35) 0%, rgba(160,112,48,0.25) 100%);
+      border-color: var(--gold-accent);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+    .diff-card:active { transform: translateY(0); }
+    .diff-icon { font-size: 2em; margin-bottom: 8px; }
+    .diff-card h3 {
+      font-size: 1.15em;
+      margin-bottom: 4px;
+      color: var(--gold-accent);
+    }
+    .diff-card p {
+      font-size: 0.75em;
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    /* ===== SETTINGS SCREEN ===== */
+    #settings-screen h2 {
+      font-size: 1.8em;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    .settings-container {
+      width: 320px;
+      max-width: 90vw;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(201,168,76,0.15);
+    }
+    .settings-row span { font-size: 0.95em; }
+    .settings-row .vol-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px; height: 26px;
+    }
+    .toggle-switch input { display: none; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: #555;
+      border-radius: 26px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--gold-accent);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(22px);
+    }
+
+    /* Range Slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 80px; height: 4px;
+      background: #555;
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      background: var(--gold-accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .vol-label { font-size: 0.8em; opacity: 0.7; width: 30px; text-align: right; }
+
+    /* ===== GAME SCREEN ===== */
+    #game-screen {
+      justify-content: flex-start;
+      background: var(--dark-bg);
+    }
+    .top-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 15px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+      min-height: 44px;
+      flex-shrink: 0;
+    }
+    .top-bar-left, .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .top-bar-center {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95em;
+    }
+    .icon-btn {
+      padding: 6px 12px;
+      font-family: 'Noto Serif KR', serif;
+      font-size: 0.85em;
+      color: var(--paper-cream);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .icon-btn:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: var(--gold-accent);
+    }
+    .icon-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .icon-btn:disabled:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(201,168,76,0.3);
+    }
+
+    .stone-icon {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      vertical-align: middle;
+    }
+    .stone-icon.black {
+      background: radial-gradient(circle at 35% 35%, #666, #111);
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    }
+    .stone-icon.white {
+      background: radial-gradient(circle at 35% 35%, #fff, #ccc);
+      border: 1px solid #999;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      position: relative;
+    }
+    #board-canvas {
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+
+    .ai-thinking {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 6px 18px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 20px;
+      font-size: 0.85em;
+      color: var(--gold-accent);
+      display: none;
+    }
+    .ai-thinking.show { display: block; }
+    .ai-thinking .dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+
+    /* ===== FORBIDDEN MOVE INDICATOR ===== */
+    .forbidden-msg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 10px 20px;
+      background: rgba(178, 34, 34, 0.9);
+      border: 1px solid #ff6666;
+      border-radius: 8px;
+      font-size: 1em;
+      color: #fff;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 10;
+    }
+    .forbidden-msg.show {
+      opacity: 1;
+    }
+
+    /* ===== RESULT OVERLAY ===== */
+    #result-overlay {
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+    }
+    .result-content {
+      text-align: center;
+      padding: 40px;
+    }
+    .result-content h2 {
+      font-size: 2.2em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    .result-content p {
+      font-size: 1em;
+      opacity: 0.8;
+      margin-bottom: 30px;
+    }
+    .result-content .result-btns {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+    }
+    .result-content .menu-btn {
+      width: 160px;
+      padding: 12px 0;
+      font-size: 1em;
+    }
+
+    /* Win color */
+    .win-text { color: #FFD700; }
+    .lose-text { color: #FF6B6B; }
+    .draw-text { color: var(--paper-cream); }
+
+    /* ===== FADE ANIMATION ===== */
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 480px) {
+      .menu-title { font-size: 2.8em; }
+      .menu-subtitle { font-size: 0.9em; }
+      .menu-btn { width: 180px; font-size: 1em; padding: 14px 0; }
+      .difficulty-grid { gap: 10px; }
+      .diff-card { padding: 15px 10px; }
+      .diff-icon { font-size: 1.5em; }
+      .top-bar { padding: 6px 10px; }
+      .icon-btn { padding: 5px 8px; font-size: 0.8em; }
+      .top-bar-center { font-size: 0.85em; }
+      .corner-frame { padding: 25px; }
+    }
+    @media (max-height: 600px) {
+      .menu-title { font-size: 2.5em; }
+      .menu-btn { padding: 10px 0; margin: 4px 0; }
+      .top-bar { min-height: 36px; padding: 4px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== MAIN MENU ===== -->
+  <div id="main-menu" class="screen active oriental-bg">
+    <div class="corner-frame" style="text-align:center;">
+      <div class="corner-bottom-left"></div>
+      <div class="corner-bottom-right"></div>
+      <h1 class="menu-title">오목</h1>
+      <p class="menu-subtitle">GOMOKU</p>
+      <div class="menu-divider" style="margin:0 auto 30px;"></div>
+      <button class="menu-btn" onclick="goToDifficultySelect()">AI 대전</button>
+      <button class="menu-btn" onclick="startPVPGame()">2인 대전</button>
+      <button class="menu-btn" onclick="showScreen('settings-screen')">설정</button>
+    </div>
+  </div>
+
+  <!-- ===== DIFFICULTY SELECT ===== -->
+  <div id="difficulty-select" class="screen oriental-bg">
+    <h2>난이도 선택</h2>
+    <div class="difficulty-grid">
+      <button class="diff-card" onclick="startAIGame(0)">
+        <span class="diff-icon">&#127793;</span>
+        <h3>초보</h3>
+        <p>오목을 처음 접하는 분</p>
+      </button>
+      <button class="diff-card" onclick="startAIGame(1)">
+        <span class="diff-icon">&#127811;</span>
+        <h3>쉬움</h3>
+        <p>기본 전략을 익히는 중</p>
+      </button>
+      <button class="diff-card" onclick="startAIGame(2)">
+        <span class="diff-icon">&#127807;</span>
+        <h3>보통</h3>
+        <p>적당한 도전을 원하는 분</p>
+      </button>
+      <button class="diff-card" onclick="startAIGame(3)">
+        <span class="diff-icon">&#127795;</span>
+        <h3>어려움</h3>
+        <p>강력한 AI와의 대결</p>
+      </button>
+    </div>
+    <button class="back-btn" onclick="showScreen('main-menu')">뒤로</button>
+  </div>
+
+  <!-- ===== SETTINGS SCREEN ===== -->
+  <div id="settings-screen" class="screen oriental-bg">
+    <h2>설정</h2>
+    <div class="settings-container">
+      <div class="settings-row">
+        <span>배경음악</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="bgm-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>BGM 음량</span>
+        <div class="vol-group">
+          <input type="range" id="bgm-volume" min="0" max="100" value="40">
+          <span class="vol-label" id="bgm-vol-label">40%</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span>효과음</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sfx-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>효과음 음량</span>
+        <div class="vol-group">
+          <input type="range" id="sfx-volume" min="0" max="100" value="60">
+          <span class="vol-label" id="sfx-vol-label">60%</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span>바둑판 크기</span>
+        <select id="board-size-select" style="font-family:'Noto Serif KR',serif;padding:5px 10px;background:#3a2a18;color:var(--paper-cream);border:1px solid rgba(201,168,76,0.4);border-radius:4px;">
+          <option value="15" selected>15x15</option>
+          <option value="19">19x19</option>
+        </select>
+      </div>
+    </div>
+    <button class="back-btn" onclick="saveSettings(); showScreen('main-menu')">뒤로</button>
+  </div>
+
+  <!-- ===== GAME SCREEN ===== -->
+  <div id="game-screen" class="screen">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <button class="icon-btn" id="btn-back" onclick="confirmBackToMenu()">메인</button>
+        <button class="icon-btn" id="btn-undo" onclick="undoMove()">무르기</button>
+      </div>
+      <div class="top-bar-center">
+        <span class="stone-icon black" id="turn-stone"></span>
+        <span id="turn-text">흑의 차례</span>
+      </div>
+      <div class="top-bar-right">
+        <span id="move-counter" style="font-size:0.8em;opacity:0.6;"></span>
+      </div>
+    </div>
+    <div class="canvas-container">
+      <canvas id="board-canvas"></canvas>
+      <div class="ai-thinking" id="ai-thinking">AI 생각 중<span class="dots"></span></div>
+      <div class="forbidden-msg" id="forbidden-msg">금수입니다!</div>
+    </div>
+  </div>
+
+  <!-- ===== RESULT OVERLAY ===== -->
+  <div id="result-overlay" class="screen">
+    <div class="result-content fade-in">
+      <h2 id="result-title" class="win-text">승리!</h2>
+      <p id="result-subtitle">축하합니다</p>
+      <div class="result-btns">
+        <button class="menu-btn" onclick="restartGame()">다시 시작</button>
+        <button class="menu-btn" onclick="backToMenuFromResult()">메인 메뉴</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== CONSTANTS =====
+    const EMPTY = 0, BLACK = 1, WHITE = 2;
+    const DIFF_NAMES = ['초보', '쉬움', '보통', '어려움'];
+
+    // ===== GAME STATE =====
+    let boardSize = 15;
+    let cellSize, padding, canvasSize;
+    let canvas, ctx;
+    let gameState = null;
+    let hoverPos = null;
+    let forbiddenTimeout = null;
+
+    // ===== SETTINGS =====
+    let bgmEnabled = true;
+    let sfxEnabled = true;
+    let bgmVolume = 0.4;
+    let sfxVolume = 0.6;
+
+    // ===== AUDIO =====
+    let audioCtx = null;
+    let masterGain = null;
+    let bgmGain = null;
+    let bgmInterval = null;
+    let currentBGMTrack = null;
+
+    // ===== INITIALIZATION =====
+    function init() {
+      canvas = document.getElementById('board-canvas');
+      ctx = canvas.getContext('2d');
+      loadSettings();
+      bindSettingsEvents();
+      setupCanvasEvents();
+    }
+
+    // ===== SCREEN MANAGEMENT =====
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+
+      if (screenId === 'main-menu' || screenId === 'difficulty-select') {
+        startBGM('menu');
+      } else if (screenId === 'game-screen') {
+        startBGM('game');
+      } else if (screenId === 'settings-screen') {
+        // keep current BGM
+      }
+    }
+
+    function goToDifficultySelect() {
+      showScreen('difficulty-select');
+    }
+
+    function startPVPGame() {
+      initGame('pvp', 0);
+      showScreen('game-screen');
+    }
+
+    function startAIGame(difficulty) {
+      initGame('ai', difficulty);
+      showScreen('game-screen');
+    }
+
+    function confirmBackToMenu() {
+      if (gameState && !gameState.isGameOver && gameState.moveCount > 0) {
+        if (!confirm('게임을 종료하고 메인 메뉴로 돌아가시겠습니까?')) return;
+      }
+      stopBGM();
+      showScreen('main-menu');
+    }
+
+    function backToMenuFromResult() {
+      document.getElementById('result-overlay').classList.remove('active');
+      stopBGM();
+      showScreen('main-menu');
+    }
+
+    function restartGame() {
+      document.getElementById('result-overlay').classList.remove('active');
+      initGame(gameState.mode, gameState.difficulty);
+      showScreen('game-screen');
+    }
+
+    // ===== SETTINGS MANAGEMENT =====
+    function loadSettings() {
+      const saved = localStorage.getItem('gomoku_settings');
+      if (saved) {
+        const s = JSON.parse(saved);
+        bgmEnabled = s.bgmEnabled !== undefined ? s.bgmEnabled : true;
+        sfxEnabled = s.sfxEnabled !== undefined ? s.sfxEnabled : true;
+        bgmVolume = s.bgmVolume !== undefined ? s.bgmVolume : 0.4;
+        sfxVolume = s.sfxVolume !== undefined ? s.sfxVolume : 0.6;
+        boardSize = s.boardSize || 15;
+      }
+      document.getElementById('bgm-toggle').checked = bgmEnabled;
+      document.getElementById('sfx-toggle').checked = sfxEnabled;
+      document.getElementById('bgm-volume').value = Math.round(bgmVolume * 100);
+      document.getElementById('bgm-vol-label').textContent = Math.round(bgmVolume * 100) + '%';
+      document.getElementById('sfx-volume').value = Math.round(sfxVolume * 100);
+      document.getElementById('sfx-vol-label').textContent = Math.round(sfxVolume * 100) + '%';
+      document.getElementById('board-size-select').value = boardSize;
+    }
+
+    function saveSettings() {
+      localStorage.setItem('gomoku_settings', JSON.stringify({
+        bgmEnabled, sfxEnabled, bgmVolume, sfxVolume, boardSize
+      }));
+    }
+
+    function bindSettingsEvents() {
+      document.getElementById('bgm-toggle').addEventListener('change', function() {
+        bgmEnabled = this.checked;
+        if (!bgmEnabled) stopBGM();
+        else startBGM('menu');
+        saveSettings();
+      });
+      document.getElementById('sfx-toggle').addEventListener('change', function() {
+        sfxEnabled = this.checked;
+        saveSettings();
+      });
+      document.getElementById('bgm-volume').addEventListener('input', function() {
+        bgmVolume = this.value / 100;
+        document.getElementById('bgm-vol-label').textContent = this.value + '%';
+        if (bgmGain) bgmGain.gain.value = bgmVolume;
+        saveSettings();
+      });
+      document.getElementById('sfx-volume').addEventListener('input', function() {
+        sfxVolume = this.value / 100;
+        document.getElementById('sfx-vol-label').textContent = this.value + '%';
+        saveSettings();
+      });
+      document.getElementById('board-size-select').addEventListener('change', function() {
+        boardSize = parseInt(this.value);
+        saveSettings();
+      });
+    }
+
+    // ===== CANVAS SETUP =====
+    function calcSizes() {
+      const maxW = window.innerWidth * 0.95;
+      const topBarH = 44;
+      const maxH = (window.innerHeight - topBarH - 20) * 0.95;
+      const available = Math.min(maxW, maxH);
+      cellSize = Math.floor(available / (boardSize + 1));
+      padding = cellSize;
+      canvasSize = cellSize * (boardSize - 1) + padding * 2;
+    }
+
+    function setupCanvas() {
+      calcSizes();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvasSize * dpr;
+      canvas.height = canvasSize * dpr;
+      canvas.style.width = canvasSize + 'px';
+      canvas.style.height = canvasSize + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function setupCanvasEvents() {
+      canvas.addEventListener('click', handleCanvasClick);
+      canvas.addEventListener('mousemove', handleCanvasHover);
+      canvas.addEventListener('mouseleave', () => { hoverPos = null; drawBoard(); });
+      canvas.addEventListener('touchstart', handleCanvasTouch, { passive: false });
+      window.addEventListener('resize', () => {
+        if (gameState) {
+          setupCanvas();
+          drawBoard();
+        }
+      });
+    }
+
+    function getGridPos(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvasSize / rect.width;
+      const scaleY = canvasSize / rect.height;
+      const x = (clientX - rect.left) * scaleX;
+      const y = (clientY - rect.top) * scaleY;
+      const col = Math.round((x - padding) / cellSize);
+      const row = Math.round((y - padding) / cellSize);
+      if (row >= 0 && row < boardSize && col >= 0 && col < boardSize) {
+        return { row, col };
+      }
+      return null;
+    }
+
+    function handleCanvasClick(e) {
+      const pos = getGridPos(e.clientX, e.clientY);
+      if (pos) handleMove(pos.row, pos.col);
+    }
+
+    function handleCanvasTouch(e) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const pos = getGridPos(t.clientX, t.clientY);
+      if (pos) handleMove(pos.row, pos.col);
+    }
+
+    function handleCanvasHover(e) {
+      const pos = getGridPos(e.clientX, e.clientY);
+      if (!pos || !gameState || gameState.isGameOver) { hoverPos = null; drawBoard(); return; }
+      if (gameState.mode === 'ai' && gameState.isAIThinking) { hoverPos = null; drawBoard(); return; }
+      if (gameState.board[pos.row][pos.col] !== EMPTY) { hoverPos = null; drawBoard(); return; }
+      hoverPos = pos;
+      drawBoard();
+    }
+
+    // ===== BOARD RENDERING =====
+    function drawBoard() {
+      if (!gameState) return;
+      const cs = canvasSize;
+
+      // Wood background
+      const woodGrad = ctx.createLinearGradient(0, 0, cs, cs);
+      woodGrad.addColorStop(0, '#D4A76A');
+      woodGrad.addColorStop(0.3, '#C4944A');
+      woodGrad.addColorStop(0.7, '#CDA05A');
+      woodGrad.addColorStop(1, '#B8863A');
+      ctx.fillStyle = woodGrad;
+      ctx.fillRect(0, 0, cs, cs);
+
+      // Wood grain
+      ctx.strokeStyle = 'rgba(139,105,20,0.08)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < cs; i += 6) {
+        ctx.beginPath();
+        ctx.moveTo(0, i + Math.sin(i * 0.02) * 3);
+        ctx.lineTo(cs, i + Math.sin(i * 0.02 + 2) * 3);
+        ctx.stroke();
+      }
+
+      // Grid lines
+      ctx.strokeStyle = '#4A3520';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < boardSize; i++) {
+        const pos = padding + i * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(padding, pos);
+        ctx.lineTo(padding + (boardSize - 1) * cellSize, pos);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(pos, padding);
+        ctx.lineTo(pos, padding + (boardSize - 1) * cellSize);
+        ctx.stroke();
+      }
+
+      // Star points
+      const starPoints = getStarPoints();
+      ctx.fillStyle = '#4A3520';
+      for (const [r, c] of starPoints) {
+        const x = padding + c * cellSize;
+        const y = padding + r * cellSize;
+        ctx.beginPath();
+        ctx.arc(x, y, cellSize * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Forbidden points (show X marks for black's forbidden moves)
+      if (gameState.currentPlayer === BLACK && !gameState.isGameOver) {
+        drawForbiddenMarks();
+      }
+
+      // Stones
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] !== EMPTY) {
+            const x = padding + c * cellSize;
+            const y = padding + r * cellSize;
+            drawStone(x, y, cellSize * 0.43, gameState.board[r][c], 1);
+          }
+        }
+      }
+
+      // Last move indicator
+      if (gameState.moveHistory.length > 0) {
+        const last = gameState.moveHistory[gameState.moveHistory.length - 1];
+        const x = padding + last.col * cellSize;
+        const y = padding + last.row * cellSize;
+        ctx.fillStyle = last.player === BLACK ? '#ff4444' : '#4444ff';
+        ctx.beginPath();
+        ctx.arc(x, y, cellSize * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Win line
+      if (gameState.winLine && gameState.winLine.length > 0) {
+        drawWinLine();
+      }
+
+      // Hover preview
+      if (hoverPos && gameState.board[hoverPos.row][hoverPos.col] === EMPTY) {
+        const x = padding + hoverPos.col * cellSize;
+        const y = padding + hoverPos.row * cellSize;
+        drawStone(x, y, cellSize * 0.43, gameState.currentPlayer, 0.35);
+      }
+    }
+
+    function getStarPoints() {
+      if (boardSize === 15) {
+        return [[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]];
+      } else if (boardSize === 19) {
+        return [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+      }
+      return [[Math.floor(boardSize/2), Math.floor(boardSize/2)]];
+    }
+
+    function drawStone(x, y, radius, player, alpha) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Shadow
+      if (alpha > 0.5) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.arc(x + 2, y + 2, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (player === BLACK) {
+        const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.1, x, y, radius);
+        grad.addColorStop(0, '#555');
+        grad.addColorStop(0.5, '#222');
+        grad.addColorStop(1, '#000');
+        ctx.fillStyle = grad;
+      } else {
+        const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.1, x, y, radius);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.6, '#eee');
+        grad.addColorStop(1, '#bbb');
+        ctx.fillStyle = grad;
+      }
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlight
+      ctx.fillStyle = player === BLACK ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(x - radius * 0.25, y - radius * 0.25, radius * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawWinLine() {
+      const line = gameState.winLine;
+      if (line.length < 2) return;
+
+      // Sort line positions
+      const sorted = [...line].sort((a, b) => a.row === b.row ? a.col - b.col : a.row - b.row);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+
+      const x1 = padding + first.col * cellSize;
+      const y1 = padding + first.row * cellSize;
+      const x2 = padding + last.col * cellSize;
+      const y2 = padding + last.row * cellSize;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 50, 50, 0.85)';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = '#ff3333';
+      ctx.shadowBlur = 15;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawForbiddenMarks() {
+      const r = cellSize * 0.15;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.5)';
+      ctx.lineWidth = 1.5;
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          if (gameState.board[row][col] !== EMPTY) continue;
+          if (isForbiddenMove(row, col, BLACK)) {
+            const x = padding + col * cellSize;
+            const y = padding + row * cellSize;
+            ctx.beginPath();
+            ctx.moveTo(x - r, y - r);
+            ctx.lineTo(x + r, y + r);
+            ctx.moveTo(x + r, y - r);
+            ctx.lineTo(x - r, y + r);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    // ===== GAME LOGIC =====
+    function initGame(mode, difficulty) {
+      gameState = {
+        mode: mode,
+        difficulty: difficulty,
+        board: Array.from({ length: boardSize }, () => Array(boardSize).fill(EMPTY)),
+        currentPlayer: BLACK,
+        moveHistory: [],
+        isGameOver: false,
+        winner: 0,
+        winLine: null,
+        isAIThinking: false,
+        moveCount: 0,
+      };
+      hoverPos = null;
+      setupCanvas();
+      drawBoard();
+      updateTurnUI();
+      document.getElementById('btn-undo').disabled = true;
+      document.getElementById('ai-thinking').classList.remove('show');
+    }
+
+    function handleMove(row, col) {
+      if (!gameState || gameState.isGameOver) return;
+      if (gameState.board[row][col] !== EMPTY) return;
+      if (gameState.mode === 'ai' && gameState.isAIThinking) return;
+      if (gameState.mode === 'ai' && gameState.currentPlayer === WHITE) return;
+
+      // Check forbidden moves for black (Korean Renju rules)
+      if (gameState.currentPlayer === BLACK && isForbiddenMove(row, col, BLACK)) {
+        showForbiddenMessage(row, col);
+        return;
+      }
+
+      placeStone(row, col, gameState.currentPlayer);
+
+      if (checkWin(row, col, gameState.currentPlayer)) {
+        endGame(gameState.currentPlayer);
+        return;
+      }
+      if (gameState.moveCount >= boardSize * boardSize) {
+        endGame(0);
+        return;
+      }
+
+      switchTurn();
+
+      if (gameState.mode === 'ai' && gameState.currentPlayer === WHITE) {
+        gameState.isAIThinking = true;
+        document.getElementById('ai-thinking').classList.add('show');
+        document.getElementById('btn-undo').disabled = true;
+        setTimeout(() => {
+          const move = getAIMove();
+          gameState.isAIThinking = false;
+          document.getElementById('ai-thinking').classList.remove('show');
+
+          if (move) {
+            animateAIStone(move.row, move.col, () => {
+              if (checkWin(move.row, move.col, WHITE)) {
+                endGame(WHITE);
+                return;
+              }
+              if (gameState.moveCount >= boardSize * boardSize) {
+                endGame(0);
+                return;
+              }
+              switchTurn();
+              document.getElementById('btn-undo').disabled = false;
+            });
+          }
+        }, 300 + Math.random() * 400);
+      }
+    }
+
+    function placeStone(row, col, player) {
+      gameState.board[row][col] = player;
+      gameState.moveHistory.push({ row, col, player });
+      gameState.moveCount++;
+      playStoneSound();
+      drawBoard();
+      updateTurnUI();
+      document.getElementById('btn-undo').disabled = false;
+    }
+
+    function switchTurn() {
+      gameState.currentPlayer = gameState.currentPlayer === BLACK ? WHITE : BLACK;
+      updateTurnUI();
+    }
+
+    function updateTurnUI() {
+      if (!gameState) return;
+      const stoneEl = document.getElementById('turn-stone');
+      const textEl = document.getElementById('turn-text');
+      const counterEl = document.getElementById('move-counter');
+
+      stoneEl.className = 'stone-icon ' + (gameState.currentPlayer === BLACK ? 'black' : 'white');
+      if (gameState.mode === 'ai') {
+        textEl.textContent = gameState.currentPlayer === BLACK ? '당신의 차례' : 'AI의 차례';
+      } else {
+        textEl.textContent = gameState.currentPlayer === BLACK ? '흑의 차례' : '백의 차례';
+      }
+      counterEl.textContent = gameState.moveCount + '수';
+    }
+
+    function undoMove() {
+      if (!gameState || gameState.moveHistory.length === 0) return;
+      if (gameState.isAIThinking) return;
+
+      const wasGameOver = gameState.isGameOver;
+      gameState.isGameOver = false;
+      gameState.winner = 0;
+      gameState.winLine = null;
+
+      if (wasGameOver) {
+        document.getElementById('result-overlay').classList.remove('active');
+      }
+
+      if (gameState.mode === 'ai') {
+        // Undo AI move + player move
+        const count = gameState.moveHistory.length >= 2 ? 2 : 1;
+        for (let i = 0; i < count; i++) {
+          const last = gameState.moveHistory.pop();
+          gameState.board[last.row][last.col] = EMPTY;
+          gameState.moveCount--;
+        }
+        gameState.currentPlayer = BLACK;
+      } else {
+        const last = gameState.moveHistory.pop();
+        gameState.board[last.row][last.col] = EMPTY;
+        gameState.moveCount--;
+        gameState.currentPlayer = last.player;
+      }
+
+      if (gameState.moveHistory.length === 0) {
+        document.getElementById('btn-undo').disabled = true;
+      }
+
+      drawBoard();
+      updateTurnUI();
+      playUndoSound();
+    }
+
+    // ===== WIN DETECTION =====
+    function checkWin(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+
+      for (const [dr, dc] of directions) {
+        let count = 1;
+        const line = [{ row, col }];
+
+        for (let i = 1; i < 5; i++) {
+          const r = row + dr * i, c = col + dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+          line.push({ row: r, col: c });
+        }
+        for (let i = 1; i < 5; i++) {
+          const r = row - dr * i, c = col - dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+          line.push({ row: r, col: c });
+        }
+
+        // Korean rules: Black must have exactly 5, white can have 5+
+        if (player === BLACK) {
+          if (count === 5) {
+            gameState.winLine = line;
+            return true;
+          }
+        } else {
+          if (count >= 5) {
+            gameState.winLine = line.slice(0, 5);
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // ===== KOREAN RENJU RULES - FORBIDDEN MOVES =====
+    function isForbiddenMove(row, col, player) {
+      if (player !== BLACK) return false;
+
+      // Temporarily place stone to check
+      gameState.board[row][col] = BLACK;
+
+      // Check overline (6+)
+      if (isOverline(row, col)) {
+        gameState.board[row][col] = EMPTY;
+        return true;
+      }
+
+      // Check if this is a winning move (5 in a row) - winning moves are NOT forbidden
+      if (checkExactFive(row, col, BLACK)) {
+        gameState.board[row][col] = EMPTY;
+        return false;
+      }
+
+      // Check double-three (3-3)
+      const openThrees = countOpenThrees(row, col, BLACK);
+      if (openThrees >= 2) {
+        gameState.board[row][col] = EMPTY;
+        return true;
+      }
+
+      // Check double-four (4-4)
+      const fours = countFours(row, col, BLACK);
+      if (fours >= 2) {
+        gameState.board[row][col] = EMPTY;
+        return true;
+      }
+
+      gameState.board[row][col] = EMPTY;
+      return false;
+    }
+
+    function isOverline(row, col) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      for (const [dr, dc] of directions) {
+        let count = 1;
+        for (let i = 1; i < 6; i++) {
+          const r = row + dr * i, c = col + dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== BLACK) break;
+          count++;
+        }
+        for (let i = 1; i < 6; i++) {
+          const r = row - dr * i, c = col - dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== BLACK) break;
+          count++;
+        }
+        if (count >= 6) return true;
+      }
+      return false;
+    }
+
+    function checkExactFive(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      for (const [dr, dc] of directions) {
+        let count = 1;
+        for (let i = 1; i < 6; i++) {
+          const r = row + dr * i, c = col + dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+        }
+        for (let i = 1; i < 6; i++) {
+          const r = row - dr * i, c = col - dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+        }
+        if (count === 5) return true;
+      }
+      return false;
+    }
+
+    function countOpenThrees(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      let count = 0;
+
+      for (const [dr, dc] of directions) {
+        if (isOpenThree(row, col, dr, dc, player)) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    function isOpenThree(row, col, dr, dc, player) {
+      // Collect the line of stones in this direction including the placed stone
+      // An open three = exactly 3 consecutive stones with both ends open,
+      // AND placing a stone at either end would create an open four (not a forbidden four)
+      const line = getLineInfo(row, col, dr, dc, player);
+
+      // Check for patterns that form an open three:
+      // Pattern: _XXX_ where _ means empty and not off-board
+      // Also consider gaps: _X_XX_, _XX_X_
+
+      // Simple consecutive check
+      if (line.consecutive === 3 && line.openEnds === 2) {
+        // Verify that extending it would make a valid four (not create a forbidden move)
+        // Check if either extension point would itself be a forbidden 4-4 or overline
+        const ext1r = row + dr * (line.forwardCount + 1);
+        const ext1c = col + dc * (line.forwardCount + 1);
+        const ext2r = row - dr * (line.backwardCount + 1);
+        const ext2c = col - dc * (line.backwardCount + 1);
+
+        let canMakeFour = false;
+        // Check extension 1
+        if (ext1r >= 0 && ext1r < boardSize && ext1c >= 0 && ext1c < boardSize &&
+            gameState.board[ext1r][ext1c] === EMPTY) {
+          gameState.board[ext1r][ext1c] = player;
+          const wouldBeOpenFour = isOpenFourInDirection(ext1r, ext1c, dr, dc, player);
+          const wouldBeOverline = isOverline(ext1r, ext1c);
+          gameState.board[ext1r][ext1c] = EMPTY;
+          if (wouldBeOpenFour && !wouldBeOverline) canMakeFour = true;
+        }
+        // Check extension 2
+        if (!canMakeFour && ext2r >= 0 && ext2r < boardSize && ext2c >= 0 && ext2c < boardSize &&
+            gameState.board[ext2r][ext2c] === EMPTY) {
+          gameState.board[ext2r][ext2c] = player;
+          const wouldBeOpenFour = isOpenFourInDirection(ext2r, ext2c, dr, dc, player);
+          const wouldBeOverline = isOverline(ext2r, ext2c);
+          gameState.board[ext2r][ext2c] = EMPTY;
+          if (wouldBeOpenFour && !wouldBeOverline) canMakeFour = true;
+        }
+
+        return canMakeFour;
+      }
+
+      // Check for gap patterns like X_XX or XX_X (with the placed stone at row,col)
+      if (line.consecutive === 2 && line.openEnds >= 1) {
+        // Check one step beyond for a gap pattern
+        if (checkGapThree(row, col, dr, dc, player)) return true;
+      }
+
+      return false;
+    }
+
+    function checkGapThree(row, col, dr, dc, player) {
+      // Check patterns like: _X_XX_, _XX_X_
+      // Look for 3 stones total with one gap, both outer ends empty
+      const lineArr = [];
+      for (let i = -5; i <= 5; i++) {
+        const r = row + dr * i, c = col + dc * i;
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) {
+          lineArr.push(-1); // Off-board = blocked
+        } else {
+          lineArr.push(gameState.board[r][c]);
+        }
+      }
+      // lineArr[5] is the placed stone position
+
+      // Check all possible 3-stone-with-1-gap patterns in a window of 5
+      // _X_XX_, _XX_X_
+      for (let start = 0; start <= 7; start++) {
+        const window = lineArr.slice(start, start + 6); // 6 cells: _????_
+        if (window.length < 6) continue;
+        if (window[0] !== EMPTY || window[5] !== EMPTY) continue;
+
+        // Count player stones and gaps in middle 4 cells
+        let stones = 0, gaps = 0, blocked = false;
+        for (let j = 1; j <= 4; j++) {
+          if (window[j] === player) stones++;
+          else if (window[j] === EMPTY) gaps++;
+          else { blocked = true; break; }
+        }
+        if (!blocked && stones === 3 && gaps === 1) {
+          // Verify the placed stone is part of this pattern
+          const stoneIdx = 5; // Position of placed stone in lineArr
+          if (stoneIdx >= start + 1 && stoneIdx <= start + 4) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function getLineInfo(row, col, dr, dc, player) {
+      let forwardCount = 0;
+      let backwardCount = 0;
+      let openEnds = 0;
+
+      // Count forward
+      for (let i = 1; i <= 5; i++) {
+        const r = row + dr * i, c = col + dc * i;
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+        if (gameState.board[r][c] !== player) break;
+        forwardCount++;
+      }
+      // Check forward end
+      const fr = row + dr * (forwardCount + 1), fc = col + dc * (forwardCount + 1);
+      if (fr >= 0 && fr < boardSize && fc >= 0 && fc < boardSize && gameState.board[fr][fc] === EMPTY) {
+        openEnds++;
+      }
+
+      // Count backward
+      for (let i = 1; i <= 5; i++) {
+        const r = row - dr * i, c = col - dc * i;
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+        if (gameState.board[r][c] !== player) break;
+        backwardCount++;
+      }
+      // Check backward end
+      const br = row - dr * (backwardCount + 1), bc = col - dc * (backwardCount + 1);
+      if (br >= 0 && br < boardSize && bc >= 0 && bc < boardSize && gameState.board[br][bc] === EMPTY) {
+        openEnds++;
+      }
+
+      return {
+        consecutive: 1 + forwardCount + backwardCount,
+        forwardCount,
+        backwardCount,
+        openEnds,
+      };
+    }
+
+    function isOpenFourInDirection(row, col, dr, dc, player) {
+      const line = getLineInfo(row, col, dr, dc, player);
+      return line.consecutive === 4 && line.openEnds === 2;
+    }
+
+    function countFours(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      let count = 0;
+      for (const [dr, dc] of directions) {
+        const line = getLineInfo(row, col, dr, dc, player);
+        // Four = exactly 4 consecutive (open or half-open)
+        if (line.consecutive === 4 && line.openEnds >= 1) {
+          count++;
+        }
+      }
+      return count;
+    }
+
+    function showForbiddenMessage(row, col) {
+      const msg = document.getElementById('forbidden-msg');
+
+      // Determine type
+      gameState.board[row][col] = BLACK;
+      let type = '금수';
+      if (isOverline(row, col)) {
+        type = '장목 금수 (6목 이상)';
+      } else {
+        const threes = countOpenThrees(row, col, BLACK);
+        const fours = countFours(row, col, BLACK);
+        if (fours >= 2) type = '사사 금수 (4-4)';
+        else if (threes >= 2) type = '삼삼 금수 (3-3)';
+      }
+      gameState.board[row][col] = EMPTY;
+
+      msg.textContent = type;
+      msg.classList.add('show');
+
+      if (forbiddenTimeout) clearTimeout(forbiddenTimeout);
+      forbiddenTimeout = setTimeout(() => {
+        msg.classList.remove('show');
+      }, 1500);
+    }
+
+    // ===== GAME END =====
+    function endGame(winner) {
+      gameState.isGameOver = true;
+      gameState.winner = winner;
+      drawBoard();
+
+      setTimeout(() => {
+        const titleEl = document.getElementById('result-title');
+        const subEl = document.getElementById('result-subtitle');
+
+        if (winner === 0) {
+          titleEl.textContent = '무승부';
+          titleEl.className = 'draw-text';
+          subEl.textContent = '팽팽한 대결이었습니다';
+        } else if (gameState.mode === 'ai') {
+          if (winner === BLACK) {
+            titleEl.textContent = '승리!';
+            titleEl.className = 'win-text';
+            subEl.textContent = '축하합니다! AI를 이겼습니다';
+          } else {
+            titleEl.textContent = '패배';
+            titleEl.className = 'lose-text';
+            subEl.textContent = '다음엔 이길 수 있어요!';
+          }
+        } else {
+          titleEl.textContent = (winner === BLACK ? '흑' : '백') + ' 승리!';
+          titleEl.className = 'win-text';
+          subEl.textContent = '축하합니다!';
+        }
+
+        document.getElementById('result-overlay').classList.add('active');
+        playResultSound(winner);
+      }, 800);
+    }
+
+    // ===== AI MOVE ANIMATION =====
+    function animateAIStone(row, col, callback) {
+      const startTime = performance.now();
+      const duration = 250;
+      const x = padding + col * cellSize;
+      const y = padding + row * cellSize;
+
+      function animate(time) {
+        const progress = Math.min(1, (time - startTime) / duration);
+        const easedScale = easeOutBack(progress);
+        const alpha = progress;
+
+        drawBoard();
+
+        // Draw animated stone on top
+        drawStone(x, y, cellSize * 0.43 * easedScale, WHITE, alpha);
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          gameState.board[row][col] = WHITE;
+          gameState.moveHistory.push({ row, col, player: WHITE });
+          gameState.moveCount++;
+          playStoneSound();
+          drawBoard();
+          updateTurnUI();
+          callback();
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    function easeOutBack(t) {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    }
+
+    // ===== AI ALGORITHMS =====
+    function getAIMove() {
+      switch (gameState.difficulty) {
+        case 0: return aiMoveBeginner();
+        case 1: return aiMoveEasy();
+        case 2: return aiMoveNormal();
+        case 3: return aiMoveHard();
+        default: return aiMoveEasy();
+      }
+    }
+
+    // --- Shared AI Utilities ---
+    function hasNeighbor(row, col, dist) {
+      for (let dr = -dist; dr <= dist; dr++) {
+        for (let dc = -dist; dc <= dist; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const r = row + dr, c = col + dc;
+          if (r >= 0 && r < boardSize && c >= 0 && c < boardSize && gameState.board[r][c] !== EMPTY) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function getCandidateMoves(dist) {
+      dist = dist || 2;
+      const candidates = [];
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] !== EMPTY) continue;
+          if (gameState.moveCount > 0 && !hasNeighbor(r, c, dist)) continue;
+          candidates.push({ row: r, col: c });
+        }
+      }
+      // If board is empty, return center
+      if (candidates.length === 0) {
+        const center = Math.floor(boardSize / 2);
+        return [{ row: center, col: center }];
+      }
+      return candidates;
+    }
+
+    function findWinningMove(player) {
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] !== EMPTY) continue;
+          gameState.board[r][c] = player;
+          let wins = false;
+          if (player === BLACK) {
+            wins = checkExactFive(r, c, player);
+          } else {
+            const directions = [[0,1],[1,0],[1,1],[1,-1]];
+            for (const [dr, dc] of directions) {
+              const line = getLineInfo(r, c, dr, dc, player);
+              if (line.consecutive >= 5) { wins = true; break; }
+            }
+          }
+          gameState.board[r][c] = EMPTY;
+          if (wins) return { row: r, col: c };
+        }
+      }
+      return null;
+    }
+
+    function evaluatePosition(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      let score = 0;
+
+      for (const [dr, dc] of directions) {
+        gameState.board[row][col] = player;
+        const line = getLineInfo(row, col, dr, dc, player);
+        gameState.board[row][col] = EMPTY;
+
+        const n = line.consecutive;
+        const open = line.openEnds;
+
+        if (n >= 5) score += 1000000;
+        else if (n === 4) {
+          if (open === 2) score += 100000;
+          else if (open === 1) score += 10000;
+        } else if (n === 3) {
+          if (open === 2) score += 5000;
+          else if (open === 1) score += 500;
+        } else if (n === 2) {
+          if (open === 2) score += 200;
+          else if (open === 1) score += 50;
+        } else if (n === 1) {
+          if (open === 2) score += 10;
+          else if (open === 1) score += 3;
+        }
+      }
+
+      // Center bonus
+      const center = Math.floor(boardSize / 2);
+      const distFromCenter = Math.abs(row - center) + Math.abs(col - center);
+      score += Math.max(0, (boardSize - distFromCenter)) * 2;
+
+      return score;
+    }
+
+    // --- Beginner AI ---
+    function aiMoveBeginner() {
+      // 50% chance to take a winning move
+      const winMove = findWinningMove(WHITE);
+      if (winMove && Math.random() < 0.5) return winMove;
+
+      // 60% chance to block opponent's winning move
+      const blockMove = findWinningMove(BLACK);
+      if (blockMove && Math.random() < 0.6) return blockMove;
+
+      // Random move near existing stones
+      const candidates = getCandidateMoves(2);
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    // --- Easy AI ---
+    function aiMoveEasy() {
+      // Always take winning move
+      const winMove = findWinningMove(WHITE);
+      if (winMove) return winMove;
+
+      // Always block opponent winning move
+      const blockMove = findWinningMove(BLACK);
+      if (blockMove) return blockMove;
+
+      const candidates = getCandidateMoves(2);
+      let bestScore = -1;
+      let bestMoves = [];
+
+      for (const move of candidates) {
+        const attackScore = evaluatePosition(move.row, move.col, WHITE);
+        const defendScore = evaluatePosition(move.row, move.col, BLACK);
+        let score = attackScore + defendScore * 0.8;
+        // Add noise for easy difficulty
+        score *= (0.7 + Math.random() * 0.6);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMoves = [move];
+        } else if (Math.abs(score - bestScore) < 10) {
+          bestMoves.push(move);
+        }
+      }
+
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    // --- Normal AI (Minimax depth 2) ---
+    function aiMoveNormal() {
+      const winMove = findWinningMove(WHITE);
+      if (winMove) return winMove;
+      const blockMove = findWinningMove(BLACK);
+      if (blockMove) return blockMove;
+
+      const candidates = getCandidateMoves(2);
+      // Score and sort candidates for better pruning
+      const scored = candidates.map(m => ({
+        ...m,
+        hScore: evaluatePosition(m.row, m.col, WHITE) + evaluatePosition(m.row, m.col, BLACK) * 0.9
+      }));
+      scored.sort((a, b) => b.hScore - a.hScore);
+      const topMoves = scored.slice(0, 15);
+
+      let bestScore = -Infinity;
+      let bestMove = topMoves[0];
+
+      for (const move of topMoves) {
+        gameState.board[move.row][move.col] = WHITE;
+        const score = minimaxNormal(1, 2, false, -Infinity, Infinity);
+        gameState.board[move.row][move.col] = EMPTY;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+      }
+      return bestMove;
+    }
+
+    function minimaxNormal(depth, maxDepth, isMaximizing, alpha, beta) {
+      // Quick win/loss check
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] === EMPTY) continue;
+          if (checkWinSimple(r, c, gameState.board[r][c])) {
+            return gameState.board[r][c] === WHITE ? 1000000 - depth : -1000000 + depth;
+          }
+        }
+      }
+
+      if (depth >= maxDepth) return evaluateBoard();
+
+      const candidates = getCandidateMoves(2);
+      const scored = candidates.map(m => ({
+        ...m,
+        hScore: evaluatePosition(m.row, m.col, isMaximizing ? WHITE : BLACK)
+      }));
+      scored.sort((a, b) => b.hScore - a.hScore);
+      const topMoves = scored.slice(0, 10);
+
+      if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (const move of topMoves) {
+          gameState.board[move.row][move.col] = WHITE;
+          const ev = minimaxNormal(depth + 1, maxDepth, false, alpha, beta);
+          gameState.board[move.row][move.col] = EMPTY;
+          maxEval = Math.max(maxEval, ev);
+          alpha = Math.max(alpha, ev);
+          if (beta <= alpha) break;
+        }
+        return maxEval;
+      } else {
+        let minEval = Infinity;
+        for (const move of topMoves) {
+          gameState.board[move.row][move.col] = BLACK;
+          const ev = minimaxNormal(depth + 1, maxDepth, true, alpha, beta);
+          gameState.board[move.row][move.col] = EMPTY;
+          minEval = Math.min(minEval, ev);
+          beta = Math.min(beta, ev);
+          if (beta <= alpha) break;
+        }
+        return minEval;
+      }
+    }
+
+    // --- Hard AI (Minimax depth 4) ---
+    function aiMoveHard() {
+      const winMove = findWinningMove(WHITE);
+      if (winMove) return winMove;
+      const blockMove = findWinningMove(BLACK);
+      if (blockMove) return blockMove;
+
+      // Check for threats
+      const threatMove = findThreatMove();
+      if (threatMove) return threatMove;
+
+      const candidates = getCandidateMoves(2);
+      const scored = candidates.map(m => ({
+        ...m,
+        hScore: evaluatePosition(m.row, m.col, WHITE) * 1.1 + evaluatePosition(m.row, m.col, BLACK)
+      }));
+      scored.sort((a, b) => b.hScore - a.hScore);
+      const topMoves = scored.slice(0, 20);
+
+      let bestScore = -Infinity;
+      let bestMove = topMoves[0];
+
+      for (const move of topMoves) {
+        gameState.board[move.row][move.col] = WHITE;
+        const score = minimaxHard(1, 4, false, -Infinity, Infinity);
+        gameState.board[move.row][move.col] = EMPTY;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+      }
+      return bestMove;
+    }
+
+    function minimaxHard(depth, maxDepth, isMaximizing, alpha, beta) {
+      // Check for terminal state
+      const lastMoves = gameState.moveHistory;
+      if (lastMoves.length > 0) {
+        const last = lastMoves[lastMoves.length - 1];
+        if (last && checkWinSimple(last.row, last.col, last.player)) {
+          return last.player === WHITE ? 1000000 - depth : -1000000 + depth;
+        }
+      }
+
+      if (depth >= maxDepth) return evaluateBoardAdvanced();
+
+      const player = isMaximizing ? WHITE : BLACK;
+
+      // Immediate win check for current player
+      const winM = findWinningMove(player);
+      if (winM) {
+        return isMaximizing ? 900000 - depth : -900000 + depth;
+      }
+
+      const candidates = getCandidateMoves(2);
+      const scored = candidates.map(m => ({
+        ...m,
+        hScore: evaluatePosition(m.row, m.col, player) + evaluatePosition(m.row, m.col, player === WHITE ? BLACK : WHITE) * 0.8
+      }));
+      scored.sort((a, b) => b.hScore - a.hScore);
+      const topMoves = scored.slice(0, depth <= 2 ? 15 : 10);
+
+      if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (const move of topMoves) {
+          gameState.board[move.row][move.col] = WHITE;
+          const ev = minimaxHard(depth + 1, maxDepth, false, alpha, beta);
+          gameState.board[move.row][move.col] = EMPTY;
+          maxEval = Math.max(maxEval, ev);
+          alpha = Math.max(alpha, ev);
+          if (beta <= alpha) break;
+        }
+        return maxEval;
+      } else {
+        let minEval = Infinity;
+        for (const move of topMoves) {
+          gameState.board[move.row][move.col] = BLACK;
+          const ev = minimaxHard(depth + 1, maxDepth, true, alpha, beta);
+          gameState.board[move.row][move.col] = EMPTY;
+          minEval = Math.min(minEval, ev);
+          beta = Math.min(beta, ev);
+          if (beta <= alpha) break;
+        }
+        return minEval;
+      }
+    }
+
+    function findThreatMove() {
+      // Look for moves that create open-4 for AI or block opponent's open-3
+      const candidates = getCandidateMoves(2);
+      let bestThreat = null;
+      let bestThreatScore = 0;
+
+      for (const move of candidates) {
+        // Check if AI can create open-4
+        gameState.board[move.row][move.col] = WHITE;
+        let threatScore = 0;
+        const directions = [[0,1],[1,0],[1,1],[1,-1]];
+        for (const [dr, dc] of directions) {
+          const line = getLineInfo(move.row, move.col, dr, dc, WHITE);
+          if (line.consecutive === 4 && line.openEnds === 2) threatScore += 50000;
+          else if (line.consecutive === 4 && line.openEnds === 1) threatScore += 5000;
+          else if (line.consecutive === 3 && line.openEnds === 2) threatScore += 3000;
+        }
+        gameState.board[move.row][move.col] = EMPTY;
+
+        // Check if blocks opponent's open-3 or open-4
+        gameState.board[move.row][move.col] = BLACK;
+        for (const [dr, dc] of directions) {
+          const line = getLineInfo(move.row, move.col, dr, dc, BLACK);
+          if (line.consecutive === 4 && line.openEnds >= 1) threatScore += 8000;
+          else if (line.consecutive === 3 && line.openEnds === 2) threatScore += 4000;
+        }
+        gameState.board[move.row][move.col] = EMPTY;
+
+        if (threatScore > bestThreatScore) {
+          bestThreatScore = threatScore;
+          bestThreat = move;
+        }
+      }
+
+      return bestThreatScore >= 5000 ? bestThreat : null;
+    }
+
+    function checkWinSimple(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      for (const [dr, dc] of directions) {
+        let count = 1;
+        for (let i = 1; i < 5; i++) {
+          const r = row + dr * i, c = col + dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+        }
+        for (let i = 1; i < 5; i++) {
+          const r = row - dr * i, c = col - dc * i;
+          if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
+          if (gameState.board[r][c] !== player) break;
+          count++;
+        }
+        if (count >= 5) return true;
+      }
+      return false;
+    }
+
+    function evaluateBoard() {
+      let score = 0;
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] === WHITE) {
+            score += evaluateStone(r, c, WHITE);
+          } else if (gameState.board[r][c] === BLACK) {
+            score -= evaluateStone(r, c, BLACK);
+          }
+        }
+      }
+      return score;
+    }
+
+    function evaluateBoardAdvanced() {
+      let score = 0;
+      const center = Math.floor(boardSize / 2);
+
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (gameState.board[r][c] === EMPTY) continue;
+
+          const player = gameState.board[r][c];
+          const stoneScore = evaluateStone(r, c, player);
+          const centerBonus = Math.max(0, (boardSize - Math.abs(r - center) - Math.abs(c - center))) * 2;
+
+          if (player === WHITE) {
+            score += stoneScore + centerBonus;
+          } else {
+            score -= stoneScore + centerBonus;
+          }
+        }
+      }
+
+      // Threat combinations bonus
+      const candidates = getCandidateMoves(2);
+      for (const move of candidates) {
+        // AI threats
+        gameState.board[move.row][move.col] = WHITE;
+        const aiThreats = countThreats(move.row, move.col, WHITE);
+        gameState.board[move.row][move.col] = EMPTY;
+
+        // Player threats
+        gameState.board[move.row][move.col] = BLACK;
+        const playerThreats = countThreats(move.row, move.col, BLACK);
+        gameState.board[move.row][move.col] = EMPTY;
+
+        score += aiThreats * 100;
+        score -= playerThreats * 100;
+      }
+
+      return score;
+    }
+
+    function evaluateStone(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      let score = 0;
+
+      for (const [dr, dc] of directions) {
+        const line = getLineInfo(row, col, dr, dc, player);
+        const n = line.consecutive;
+        const open = line.openEnds;
+
+        if (n >= 5) score += 100000;
+        else if (n === 4 && open === 2) score += 10000;
+        else if (n === 4 && open === 1) score += 1000;
+        else if (n === 3 && open === 2) score += 500;
+        else if (n === 3 && open === 1) score += 50;
+        else if (n === 2 && open === 2) score += 20;
+        else if (n === 2 && open === 1) score += 5;
+      }
+      return score;
+    }
+
+    function countThreats(row, col, player) {
+      const directions = [[0,1],[1,0],[1,1],[1,-1]];
+      let threats = 0;
+      for (const [dr, dc] of directions) {
+        const line = getLineInfo(row, col, dr, dc, player);
+        if (line.consecutive >= 4 && line.openEnds >= 1) threats += 3;
+        else if (line.consecutive === 3 && line.openEnds === 2) threats += 2;
+      }
+      return threats;
+    }
+
+    // ===== WEB AUDIO API - SOUND EFFECTS =====
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.connect(audioCtx.destination);
+        bgmGain = audioCtx.createGain();
+        bgmGain.gain.value = bgmVolume;
+        bgmGain.connect(masterGain);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playStoneSound() {
+      if (!sfxEnabled) return;
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+
+      // Percussive "tok" - stone on wood
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+      gain.gain.setValueAtTime(0.3 * sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.12);
+
+      // Wood resonance
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.value = 150;
+      gain2.gain.setValueAtTime(0.15 * sfxVolume, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc2.connect(gain2);
+      gain2.connect(masterGain);
+      osc2.start(now);
+      osc2.stop(now + 0.18);
+    }
+
+    function playUndoSound() {
+      if (!sfxEnabled) return;
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+      gain.gain.setValueAtTime(0.2 * sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    }
+
+    function playResultSound(winner) {
+      if (!sfxEnabled) return;
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+
+      if (winner === 0) {
+        // Draw sound - neutral
+        playNote(ctx, 329.6, now, 0.3, 0.15);
+        playNote(ctx, 293.7, now + 0.3, 0.3, 0.15);
+        return;
+      }
+
+      const isWin = (gameState.mode === 'pvp') || (winner === BLACK);
+
+      if (isWin) {
+        // Victory fanfare - ascending
+        const notes = [392, 440, 523.3, 659.3, 784];
+        notes.forEach((freq, i) => {
+          playNote(ctx, freq, now + i * 0.15, 0.4, 0.2);
+        });
+      } else {
+        // Defeat - descending
+        const notes = [392, 329.6, 261.6];
+        notes.forEach((freq, i) => {
+          playNote(ctx, freq, now + i * 0.25, 0.5, 0.15);
+        });
+      }
+    }
+
+    function playNote(ctx, freq, time, duration, volume) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume * sfxVolume, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(time);
+      osc.stop(time + duration + 0.05);
+    }
+
+    // ===== WEB AUDIO API - BGM =====
+    const BGM_TRACKS = {
+      menu: {
+        patterns: [
+          // Peaceful gayageum arpeggios in Korean pentatonic (pyeongjo)
+          [261.6, 329.6, 392, 440, 392, 329.6, 261.6, 0],
+          [293.7, 349.2, 440, 523.3, 440, 349.2, 293.7, 0],
+          [329.6, 392, 523.3, 440, 392, 329.6, 261.6, 0],
+          [440, 392, 329.6, 293.7, 261.6, 293.7, 329.6, 0],
+          [392, 440, 523.3, 440, 329.6, 0, 261.6, 0],
+        ],
+        tempo: 500,
+        instrument: 'gayageum',
+      },
+      game: {
+        patterns: [
+          // Contemplative daegeum melody
+          [392, 0, 440, 392, 329.6, 0, 293.7, 261.6],
+          [261.6, 0, 329.6, 392, 440, 0, 523.3, 440],
+          [349.2, 329.6, 0, 293.7, 261.6, 0, 329.6, 0],
+          [440, 0, 392, 0, 329.6, 293.7, 261.6, 0],
+          [293.7, 329.6, 392, 0, 440, 392, 329.6, 0],
+        ],
+        bassPatterns: [
+          [130.8, 0, 0, 0, 146.8, 0, 0, 0],
+          [164.8, 0, 0, 0, 130.8, 0, 0, 0],
+          [146.8, 0, 0, 0, 130.8, 0, 0, 0],
+          [164.8, 0, 0, 0, 196, 0, 130.8, 0],
+          [130.8, 0, 0, 0, 164.8, 0, 0, 0],
+        ],
+        tempo: 550,
+        instrument: 'daegeum',
+      }
+    };
+
+    let bgmState = { patternIdx: 0, noteIdx: 0 };
+
+    function startBGM(trackName) {
+      if (!bgmEnabled) return;
+      if (currentBGMTrack === trackName) return;
+
+      stopBGM();
+      currentBGMTrack = trackName;
+      const track = BGM_TRACKS[trackName];
+      if (!track) return;
+
+      const ctx = getAudioCtx();
+      bgmGain.gain.value = bgmVolume;
+
+      // Random start pattern
+      bgmState.patternIdx = Math.floor(Math.random() * track.patterns.length);
+      bgmState.noteIdx = 0;
+
+      bgmInterval = setInterval(() => {
+        if (!bgmEnabled) { stopBGM(); return; }
+
+        const pattern = track.patterns[bgmState.patternIdx];
+        const freq = pattern[bgmState.noteIdx];
+
+        if (freq > 0) {
+          if (track.instrument === 'gayageum') {
+            playGayageum(ctx, freq, ctx.currentTime, track.tempo / 1000 * 1.5);
+          } else if (track.instrument === 'daegeum') {
+            playDaegeum(ctx, freq, ctx.currentTime, track.tempo / 1000 * 1.8);
+          }
+        }
+
+        // Bass for game track
+        if (track.bassPatterns) {
+          const bassFreq = track.bassPatterns[bgmState.patternIdx][bgmState.noteIdx];
+          if (bassFreq > 0) {
+            playGeomungo(ctx, bassFreq, ctx.currentTime, track.tempo / 1000 * 2);
+          }
+        }
+
+        bgmState.noteIdx++;
+        if (bgmState.noteIdx >= pattern.length) {
+          bgmState.noteIdx = 0;
+          bgmState.patternIdx = (bgmState.patternIdx + 1) % track.patterns.length;
+        }
+      }, track.tempo);
+    }
+
+    function stopBGM() {
+      if (bgmInterval) {
+        clearInterval(bgmInterval);
+        bgmInterval = null;
+      }
+      currentBGMTrack = null;
+    }
+
+    // --- Instrument Synthesis ---
+    function playGayageum(ctx, freq, time, duration) {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const g = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(freq, time);
+      osc1.frequency.linearRampToValueAtTime(freq * 0.997, time + duration);
+
+      osc2.type = 'sine';
+      osc2.frequency.value = freq * 2;
+
+      g.gain.setValueAtTime(0, time);
+      g.gain.linearRampToValueAtTime(0.12, time + 0.02);
+      g.gain.setValueAtTime(0.12, time + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.04, time + duration * 0.4);
+      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+      const merge = ctx.createGain();
+      merge.gain.value = 1;
+
+      const harmGain = ctx.createGain();
+      harmGain.gain.value = 0.12;
+
+      osc1.connect(merge);
+      osc2.connect(harmGain);
+      harmGain.connect(merge);
+      merge.connect(g);
+      g.connect(bgmGain);
+
+      osc1.start(time);
+      osc1.stop(time + duration + 0.1);
+      osc2.start(time);
+      osc2.stop(time + duration + 0.1);
+    }
+
+    function playGeomungo(ctx, freq, time, duration) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+
+      g.gain.setValueAtTime(0, time);
+      g.gain.linearRampToValueAtTime(0.08, time + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.03, time + 0.15);
+      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+      osc.connect(g);
+      g.connect(bgmGain);
+
+      osc.start(time);
+      osc.stop(time + duration + 0.1);
+    }
+
+    function playDaegeum(ctx, freq, time, duration) {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const g = ctx.createGain();
+
+      // Main tone - sine for flute quality
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(freq, time);
+
+      // Add vibrato
+      const vibratoRate = 5;
+      const vibratoDepth = 3;
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = vibratoRate;
+      lfoGain.gain.value = vibratoDepth;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc1.frequency);
+      lfo.start(time + 0.15); // Vibrato starts after initial attack
+      lfo.stop(time + duration + 0.1);
+
+      // Breathy overtone
+      osc2.type = 'sawtooth';
+      osc2.frequency.value = freq;
+
+      const breathGain = ctx.createGain();
+      breathGain.gain.value = 0.02;
+
+      g.gain.setValueAtTime(0, time);
+      g.gain.linearRampToValueAtTime(0.1, time + 0.1);
+      g.gain.setValueAtTime(0.1, time + duration * 0.3);
+      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+      osc1.connect(g);
+      osc2.connect(breathGain);
+      breathGain.connect(g);
+      g.connect(bgmGain);
+
+      osc1.start(time);
+      osc1.stop(time + duration + 0.1);
+      osc2.start(time);
+      osc2.stop(time + duration + 0.1);
+    }
+
+    // ===== INIT ON LOAD =====
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Unlock audio on first user interaction
+    document.addEventListener('click', function unlock() {
+      getAudioCtx();
+      if (bgmEnabled && !bgmInterval) {
+        startBGM('menu');
+      }
+      document.removeEventListener('click', unlock);
+    }, { once: true });
+  </script>
+</body>
+</html>
