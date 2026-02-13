@@ -608,6 +608,7 @@
     let gameState = null;
     let hoverPos = null;
     let forbiddenTimeout = null;
+    let cachedForbiddenMoves = null; // Cache forbidden moves to avoid recalculating every frame
 
     // ===== SETTINGS =====
     let bgmEnabled = true;
@@ -967,25 +968,35 @@
       ctx.restore();
     }
 
+    function updateForbiddenCache() {
+      cachedForbiddenMoves = [];
+      if (gameState.moveCount < 4) return; // Not enough stones for forbidden patterns
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          if (gameState.board[row][col] !== EMPTY) continue;
+          if (!hasNeighbor(row, col, 2)) continue; // Skip isolated cells for speed
+          if (isForbiddenMove(row, col, BLACK)) {
+            cachedForbiddenMoves.push({ row, col });
+          }
+        }
+      }
+    }
+
     function drawForbiddenMarks() {
+      if (!cachedForbiddenMoves || cachedForbiddenMoves.length === 0) return;
       const r = cellSize * 0.15;
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 80, 80, 0.5)';
       ctx.lineWidth = 1.5;
-      for (let row = 0; row < boardSize; row++) {
-        for (let col = 0; col < boardSize; col++) {
-          if (gameState.board[row][col] !== EMPTY) continue;
-          if (isForbiddenMove(row, col, BLACK)) {
-            const x = padding + col * cellSize;
-            const y = padding + row * cellSize;
-            ctx.beginPath();
-            ctx.moveTo(x - r, y - r);
-            ctx.lineTo(x + r, y + r);
-            ctx.moveTo(x + r, y - r);
-            ctx.lineTo(x - r, y + r);
-            ctx.stroke();
-          }
-        }
+      for (const pos of cachedForbiddenMoves) {
+        const x = padding + pos.col * cellSize;
+        const y = padding + pos.row * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(x - r, y - r);
+        ctx.lineTo(x + r, y + r);
+        ctx.moveTo(x + r, y - r);
+        ctx.lineTo(x - r, y + r);
+        ctx.stroke();
       }
       ctx.restore();
     }
@@ -1005,6 +1016,7 @@
         moveCount: 0,
       };
       hoverPos = null;
+      cachedForbiddenMoves = [];
       setupCanvas();
       drawBoard();
       updateTurnUI();
@@ -1019,9 +1031,12 @@
       if (gameState.mode === 'ai' && gameState.currentPlayer === WHITE) return;
 
       // Check forbidden moves for black (Korean Renju rules)
-      if (gameState.currentPlayer === BLACK && isForbiddenMove(row, col, BLACK)) {
-        showForbiddenMessage(row, col);
-        return;
+      if (gameState.currentPlayer === BLACK) {
+        const isCachedForbidden = cachedForbiddenMoves && cachedForbiddenMoves.some(p => p.row === row && p.col === col);
+        if (isCachedForbidden || isForbiddenMove(row, col, BLACK)) {
+          showForbiddenMessage(row, col);
+          return;
+        }
       }
 
       placeStone(row, col, gameState.currentPlayer);
@@ -1069,6 +1084,7 @@
       gameState.moveHistory.push({ row, col, player });
       gameState.moveCount++;
       playStoneSound();
+      updateForbiddenCache();
       drawBoard();
       updateTurnUI();
       document.getElementById('btn-undo').disabled = false;
@@ -1127,6 +1143,7 @@
         document.getElementById('btn-undo').disabled = true;
       }
 
+      updateForbiddenCache();
       drawBoard();
       updateTurnUI();
       playUndoSound();
@@ -1330,15 +1347,15 @@
       // Check all possible 3-stone-with-1-gap patterns in a window of 5
       // _X_XX_, _XX_X_
       for (let start = 0; start <= 7; start++) {
-        const window = lineArr.slice(start, start + 6); // 6 cells: _????_
-        if (window.length < 6) continue;
-        if (window[0] !== EMPTY || window[5] !== EMPTY) continue;
+        const seg = lineArr.slice(start, start + 6); // 6 cells: _????_
+        if (seg.length < 6) continue;
+        if (seg[0] !== EMPTY || seg[5] !== EMPTY) continue;
 
         // Count player stones and gaps in middle 4 cells
         let stones = 0, gaps = 0, blocked = false;
         for (let j = 1; j <= 4; j++) {
-          if (window[j] === player) stones++;
-          else if (window[j] === EMPTY) gaps++;
+          if (seg[j] === player) stones++;
+          else if (seg[j] === EMPTY) gaps++;
           else { blocked = true; break; }
         }
         if (!blocked && stones === 3 && gaps === 1) {
@@ -1493,6 +1510,7 @@
           gameState.moveHistory.push({ row, col, player: WHITE });
           gameState.moveCount++;
           playStoneSound();
+          updateForbiddenCache();
           drawBoard();
           updateTurnUI();
           callback();
@@ -1676,7 +1694,7 @@
 
       for (const move of topMoves) {
         gameState.board[move.row][move.col] = WHITE;
-        const score = minimaxNormal(1, 2, false, -Infinity, Infinity);
+        const score = minimaxNormal(1, 2, false, -Infinity, Infinity, move.row, move.col, WHITE);
         gameState.board[move.row][move.col] = EMPTY;
 
         if (score > bestScore) {
@@ -1687,15 +1705,10 @@
       return bestMove;
     }
 
-    function minimaxNormal(depth, maxDepth, isMaximizing, alpha, beta) {
-      // Quick win/loss check
-      for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) {
-          if (gameState.board[r][c] === EMPTY) continue;
-          if (checkWinSimple(r, c, gameState.board[r][c])) {
-            return gameState.board[r][c] === WHITE ? 1000000 - depth : -1000000 + depth;
-          }
-        }
+    function minimaxNormal(depth, maxDepth, isMaximizing, alpha, beta, lastRow, lastCol, lastPlayer) {
+      // Check if last move was a win
+      if (lastRow !== undefined && checkWinSimple(lastRow, lastCol, lastPlayer)) {
+        return lastPlayer === WHITE ? 1000000 - depth : -1000000 + depth;
       }
 
       if (depth >= maxDepth) return evaluateBoard();
@@ -1712,7 +1725,7 @@
         let maxEval = -Infinity;
         for (const move of topMoves) {
           gameState.board[move.row][move.col] = WHITE;
-          const ev = minimaxNormal(depth + 1, maxDepth, false, alpha, beta);
+          const ev = minimaxNormal(depth + 1, maxDepth, false, alpha, beta, move.row, move.col, WHITE);
           gameState.board[move.row][move.col] = EMPTY;
           maxEval = Math.max(maxEval, ev);
           alpha = Math.max(alpha, ev);
@@ -1723,7 +1736,7 @@
         let minEval = Infinity;
         for (const move of topMoves) {
           gameState.board[move.row][move.col] = BLACK;
-          const ev = minimaxNormal(depth + 1, maxDepth, true, alpha, beta);
+          const ev = minimaxNormal(depth + 1, maxDepth, true, alpha, beta, move.row, move.col, BLACK);
           gameState.board[move.row][move.col] = EMPTY;
           minEval = Math.min(minEval, ev);
           beta = Math.min(beta, ev);
@@ -1757,7 +1770,7 @@
 
       for (const move of topMoves) {
         gameState.board[move.row][move.col] = WHITE;
-        const score = minimaxHard(1, 4, false, -Infinity, Infinity);
+        const score = minimaxHard(1, 4, false, -Infinity, Infinity, move.row, move.col, WHITE);
         gameState.board[move.row][move.col] = EMPTY;
 
         if (score > bestScore) {
@@ -1768,14 +1781,10 @@
       return bestMove;
     }
 
-    function minimaxHard(depth, maxDepth, isMaximizing, alpha, beta) {
-      // Check for terminal state
-      const lastMoves = gameState.moveHistory;
-      if (lastMoves.length > 0) {
-        const last = lastMoves[lastMoves.length - 1];
-        if (last && checkWinSimple(last.row, last.col, last.player)) {
-          return last.player === WHITE ? 1000000 - depth : -1000000 + depth;
-        }
+    function minimaxHard(depth, maxDepth, isMaximizing, alpha, beta, lastRow, lastCol, lastPlayer) {
+      // Check if last move was a win
+      if (lastRow !== undefined && checkWinSimple(lastRow, lastCol, lastPlayer)) {
+        return lastPlayer === WHITE ? 1000000 - depth : -1000000 + depth;
       }
 
       if (depth >= maxDepth) return evaluateBoardAdvanced();
@@ -1794,13 +1803,13 @@
         hScore: evaluatePosition(m.row, m.col, player) + evaluatePosition(m.row, m.col, player === WHITE ? BLACK : WHITE) * 0.8
       }));
       scored.sort((a, b) => b.hScore - a.hScore);
-      const topMoves = scored.slice(0, depth <= 2 ? 15 : 10);
+      const topMoves = scored.slice(0, depth <= 1 ? 12 : depth <= 2 ? 8 : 5);
 
       if (isMaximizing) {
         let maxEval = -Infinity;
         for (const move of topMoves) {
           gameState.board[move.row][move.col] = WHITE;
-          const ev = minimaxHard(depth + 1, maxDepth, false, alpha, beta);
+          const ev = minimaxHard(depth + 1, maxDepth, false, alpha, beta, move.row, move.col, WHITE);
           gameState.board[move.row][move.col] = EMPTY;
           maxEval = Math.max(maxEval, ev);
           alpha = Math.max(alpha, ev);
@@ -1811,7 +1820,7 @@
         let minEval = Infinity;
         for (const move of topMoves) {
           gameState.board[move.row][move.col] = BLACK;
-          const ev = minimaxHard(depth + 1, maxDepth, true, alpha, beta);
+          const ev = minimaxHard(depth + 1, maxDepth, true, alpha, beta, move.row, move.col, BLACK);
           gameState.board[move.row][move.col] = EMPTY;
           minEval = Math.min(minEval, ev);
           beta = Math.min(beta, ev);
@@ -1911,23 +1920,6 @@
             score -= stoneScore + centerBonus;
           }
         }
-      }
-
-      // Threat combinations bonus
-      const candidates = getCandidateMoves(2);
-      for (const move of candidates) {
-        // AI threats
-        gameState.board[move.row][move.col] = WHITE;
-        const aiThreats = countThreats(move.row, move.col, WHITE);
-        gameState.board[move.row][move.col] = EMPTY;
-
-        // Player threats
-        gameState.board[move.row][move.col] = BLACK;
-        const playerThreats = countThreats(move.row, move.col, BLACK);
-        gameState.board[move.row][move.col] = EMPTY;
-
-        score += aiThreats * 100;
-        score -= playerThreats * 100;
       }
 
       return score;
