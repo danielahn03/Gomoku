@@ -447,6 +447,97 @@
     .lose-text { color: #FF6B6B; }
     .draw-text { color: var(--paper-cream); }
 
+    /* ===== PAUSE OVERLAY ===== */
+    #pause-overlay {
+      background: rgba(0,0,0,0.7);
+      z-index: 90;
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+    }
+    .pause-content {
+      text-align: center;
+      padding: 35px 45px;
+      background: linear-gradient(180deg, rgba(58,42,24,0.95) 0%, rgba(42,31,20,0.97) 100%);
+      border: 1.5px solid rgba(201,168,76,0.4);
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      position: relative;
+      min-width: 240px;
+    }
+    .pause-content::before,
+    .pause-content::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: var(--gold-accent);
+      border-style: solid;
+    }
+    .pause-content::before {
+      top: 8px; left: 8px;
+      border-width: 1.5px 0 0 1.5px;
+    }
+    .pause-content::after {
+      top: 8px; right: 8px;
+      border-width: 1.5px 1.5px 0 0;
+    }
+    .pause-title {
+      font-size: 1.5em;
+      font-weight: 700;
+      color: var(--gold-accent);
+      margin-bottom: 25px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+      letter-spacing: 0.1em;
+    }
+    .pause-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .pause-btn {
+      width: 200px;
+      padding: 13px 0;
+      font-family: 'Noto Serif KR', serif;
+      font-size: 1em;
+      font-weight: 700;
+      color: var(--paper-cream);
+      background: linear-gradient(180deg, rgba(196,148,74,0.25) 0%, rgba(160,112,48,0.2) 100%);
+      border: 1px solid rgba(201,168,76,0.35);
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+    .pause-btn:hover {
+      background: linear-gradient(180deg, rgba(196,148,74,0.45) 0%, rgba(160,112,48,0.35) 100%);
+      border-color: var(--gold-accent);
+      transform: scale(1.03);
+    }
+    .pause-btn:active {
+      transform: scale(0.97);
+    }
+    .pause-btn.primary {
+      background: var(--btn-bg);
+      border-color: var(--gold-accent);
+    }
+    .pause-btn.primary:hover {
+      background: var(--btn-hover);
+    }
+    .pause-btn.danger {
+      color: #ff9999;
+      border-color: rgba(255,100,100,0.3);
+    }
+    .pause-btn.danger:hover {
+      border-color: rgba(255,100,100,0.6);
+      background: rgba(178,34,34,0.2);
+    }
+    .pause-divider {
+      width: 60%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.25), transparent);
+      margin: 5px auto;
+    }
+
     /* ===== FADE ANIMATION ===== */
     .fade-in {
       animation: fadeIn 0.3s ease;
@@ -559,7 +650,7 @@
         </select>
       </div>
     </div>
-    <button class="back-btn" onclick="saveSettings(); showScreen('main-menu')">뒤로</button>
+    <button class="back-btn" onclick="closeSettings()">뒤로</button>
   </div>
 
   <!-- ===== GAME SCREEN ===== -->
@@ -581,6 +672,21 @@
       <canvas id="board-canvas"></canvas>
       <div class="ai-thinking" id="ai-thinking">AI 생각 중<span class="dots"></span></div>
       <div class="forbidden-msg" id="forbidden-msg">금수입니다!</div>
+    </div>
+  </div>
+
+  <!-- ===== PAUSE OVERLAY ===== -->
+  <div id="pause-overlay" class="screen">
+    <div class="pause-content fade-in">
+      <div class="pause-title">일시정지</div>
+      <div class="pause-btns">
+        <button class="pause-btn primary" onclick="resumeGame()">계속</button>
+        <div class="pause-divider"></div>
+        <button class="pause-btn" onclick="restartFromPause()">다시하기</button>
+        <button class="pause-btn" onclick="settingsFromPause()">설정</button>
+        <div class="pause-divider"></div>
+        <button class="pause-btn danger" onclick="mainMenuFromPause()">메인메뉴</button>
+      </div>
     </div>
   </div>
 
@@ -630,6 +736,22 @@
       loadSettings();
       bindSettingsEvents();
       setupCanvasEvents();
+
+      // ESC key to open/close pause menu
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          const gameScreenActive = document.getElementById('game-screen').classList.contains('active');
+          const pauseActive = document.getElementById('pause-overlay').classList.contains('active');
+          const resultActive = document.getElementById('result-overlay').classList.contains('active');
+
+          if (pauseActive) {
+            resumeGame();
+          } else if (gameScreenActive && !resultActive && gameState && !gameState.isGameOver) {
+            openPauseMenu();
+          }
+        }
+      });
     }
 
     // ===== SCREEN MANAGEMENT =====
@@ -660,12 +782,57 @@
       showScreen('game-screen');
     }
 
-    function confirmBackToMenu() {
-      if (gameState && !gameState.isGameOver && gameState.moveCount > 0) {
-        if (!confirm('게임을 종료하고 메인 메뉴로 돌아가시겠습니까?')) return;
-      }
+    // ===== PAUSE MENU =====
+    let isPaused = false;
+    let pauseReturnToSettings = false;
+
+    function openPauseMenu() {
+      if (!gameState) return;
+      if (gameState.isGameOver) return;
+      if (isPaused) return;
+      isPaused = true;
+      document.getElementById('pause-overlay').classList.add('active');
+    }
+
+    function resumeGame() {
+      isPaused = false;
+      document.getElementById('pause-overlay').classList.remove('active');
+    }
+
+    function restartFromPause() {
+      isPaused = false;
+      document.getElementById('pause-overlay').classList.remove('active');
+      initGame(gameState.mode, gameState.difficulty);
+      showScreen('game-screen');
+    }
+
+    function settingsFromPause() {
+      pauseReturnToSettings = true;
+      document.getElementById('pause-overlay').classList.remove('active');
+      showScreen('settings-screen');
+    }
+
+    function mainMenuFromPause() {
+      isPaused = false;
+      document.getElementById('pause-overlay').classList.remove('active');
       stopBGM();
       showScreen('main-menu');
+    }
+
+    function closeSettings() {
+      saveSettings();
+      if (pauseReturnToSettings) {
+        pauseReturnToSettings = false;
+        showScreen('game-screen');
+        // Re-open pause menu after returning to game
+        setTimeout(() => openPauseMenu(), 50);
+      } else {
+        showScreen('main-menu');
+      }
+    }
+
+    function confirmBackToMenu() {
+      openPauseMenu();
     }
 
     function backToMenuFromResult() {
@@ -1031,6 +1198,7 @@
     }
 
     function handleMove(row, col) {
+      if (isPaused) return;
       if (!gameState || gameState.isGameOver) return;
       if (gameState.board[row][col] !== EMPTY) return;
       if (gameState.mode === 'ai' && gameState.isAIThinking) return;
