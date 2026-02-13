@@ -354,11 +354,16 @@
       border-color: rgba(201,168,76,0.3);
     }
     .menu-icon-btn {
-      font-size: 1.15em;
       padding: 0 10px;
-      line-height: 1;
-      position: relative;
-      top: -1px;
+      gap: 4px;
+      flex-direction: column;
+    }
+    .menu-icon-btn span {
+      display: block;
+      width: 16px;
+      height: 2px;
+      background: var(--paper-cream);
+      border-radius: 1px;
     }
 
     .stone-icon {
@@ -676,7 +681,7 @@
   <div id="game-screen" class="screen">
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class="icon-btn menu-icon-btn" id="btn-menu" onclick="openPauseMenu()">☰</button>
+        <button class="icon-btn menu-icon-btn" id="btn-menu" onclick="openPauseMenu()"><span></span><span></span><span></span></button>
         <button class="icon-btn" id="btn-undo" onclick="undoMove()">무르기</button>
       </div>
       <div class="top-bar-center">
