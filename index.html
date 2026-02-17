@@ -2319,195 +2319,400 @@
       osc.stop(time + duration + 0.05);
     }
 
-    // ===== WEB AUDIO API - BGM =====
+    // ===== WEB AUDIO API - BGM (NES/Famicom style chiptune) =====
+
+    // Note frequency helpers
+    const N = {
+      C3:130.81,D3:146.83,E3:164.81,F3:174.61,G3:196.00,A3:220.00,B3:246.94,
+      C4:261.63,D4:293.66,E4:329.63,F4:349.23,G4:392.00,A4:440.00,B4:493.88,
+      C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99,A5:880.00,B5:987.77,
+      C6:1046.50,D6:1174.66,E6:1318.51,
+      R:0  // Rest
+    };
+
+    // ---- 8-bit Instrument Channels ----
+
+    // Pulse wave channel (NES Pulse 1 - lead melody) with duty cycle emulation
+    function playPulse1(ctx, freq, time, dur, vol) {
+      if (freq <= 0) return;
+      vol = vol || 0.09;
+      // Build a 25% duty pulse via harmonics
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, time);
+
+      // Pitch slide for expressiveness
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(vol, time);
+      g.gain.setValueAtTime(vol, time + dur * 0.8);
+      g.gain.linearRampToValueAtTime(0, time + dur);
+
+      osc.connect(g);
+      g.connect(bgmGain);
+      osc.start(time);
+      osc.stop(time + dur + 0.02);
+    }
+
+    // Pulse wave channel 2 (harmony / counter-melody) - slightly different timbre
+    function playPulse2(ctx, freq, time, dur, vol) {
+      if (freq <= 0) return;
+      vol = vol || 0.06;
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, time);
+
+      // Subtle vibrato like NES games
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.value = 6;
+      lfoG.gain.value = freq * 0.008;
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+      lfo.start(time + dur * 0.3);
+      lfo.stop(time + dur + 0.02);
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(vol, time);
+      g.gain.setValueAtTime(vol, time + dur * 0.75);
+      g.gain.linearRampToValueAtTime(0, time + dur);
+
+      osc.connect(g);
+      g.connect(bgmGain);
+      osc.start(time);
+      osc.stop(time + dur + 0.02);
+    }
+
+    // Triangle wave channel (NES bass)
+    function playTriBass(ctx, freq, time, dur) {
+      if (freq <= 0) return;
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, time);
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.1, time);
+      g.gain.setValueAtTime(0.1, time + dur * 0.85);
+      g.gain.linearRampToValueAtTime(0, time + dur);
+
+      osc.connect(g);
+      g.connect(bgmGain);
+      osc.start(time);
+      osc.stop(time + dur + 0.02);
+    }
+
+    // Noise channel (NES drums)
+    function playNoiseDrum(ctx, type, time, vol) {
+      vol = vol || 0.07;
+      const bufSize = ctx.sampleRate * 0.08;
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+
+      if (type === 'kick') {
+        // Kick: short noise burst + pitch-dropping oscillator
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, time);
+        osc.frequency.exponentialRampToValueAtTime(40, time + 0.08);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(vol * 1.5, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+        osc.connect(g);
+        g.connect(bgmGain);
+        osc.start(time);
+        osc.stop(time + 0.15);
+      }
+
+      if (type === 'snare' || type === 'hat') {
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        // Filter for hat (high-pass) vs snare (band-pass)
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = ctx.createBiquadFilter();
+        filter.type = type === 'hat' ? 'highpass' : 'bandpass';
+        filter.frequency.value = type === 'hat' ? 8000 : 3000;
+        const g = ctx.createGain();
+        const d = type === 'hat' ? 0.04 : 0.08;
+        g.gain.setValueAtTime(vol * (type === 'hat' ? 0.6 : 1), time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + d);
+        noise.connect(filter);
+        filter.connect(g);
+        g.connect(bgmGain);
+        noise.start(time);
+        noise.stop(time + d + 0.02);
+      }
+    }
+
+    // ======================================================
+    //  BGM TRACKS - Complex multi-channel NES/Famicom style
+    // ======================================================
+
     const BGM_TRACKS = {
+      // ---- MENU BGM: Graceful Eastern palace theme ----
+      // Relaxed, elegant - like a title screen inviting you in
+      // Key: A minor pentatonic (A C D E G), BPM 88, lots of breathing room
       menu: {
-        patterns: [
-          // Peaceful gayageum arpeggios in Korean pentatonic (pyeongjo)
-          [261.6, 329.6, 392, 440, 392, 329.6, 261.6, 0],
-          [293.7, 349.2, 440, 523.3, 440, 349.2, 293.7, 0],
-          [329.6, 392, 523.3, 440, 392, 329.6, 261.6, 0],
-          [440, 392, 329.6, 293.7, 261.6, 293.7, 329.6, 0],
-          [392, 440, 523.3, 440, 329.6, 0, 261.6, 0],
+        bpm: 88,
+        sections: [
+          // === INTRO (gentle entrance, sets the mood) ===
+          { name: 'intro', bars: [
+            { lead:    [N.R,N.R,N.R,N.R, N.E5,N.R,N.R,N.R, N.D5,N.R,N.R,N.E5, N.R,N.R,N.R,N.R],
+              harmony: [N.R,N.R,N.R,N.R, N.C5,N.R,N.R,N.R, N.A4,N.R,N.R,N.C5, N.R,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.R,N.R,N.A3,N.R],
+              drums:   ['.','.','.','.', '.','.','.','.', 'K','.','.','.', '.','.','.','.'] },
+            { lead:    [N.G5,N.R,N.R,N.E5, N.R,N.R,N.D5,N.R, N.R,N.R,N.E5,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.E5,N.R,N.R,N.C5, N.R,N.R,N.A4,N.R, N.R,N.R,N.C5,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.C3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.A3,N.R,N.R,N.R],
+              drums:   ['K','.','.','.', '.','.','.','.', 'K','.','.','.', '.','.','.','.'] },
+          ]},
+          // === SECTION A (main melody - flowing, regal) ===
+          { name: 'A', bars: [
+            { lead:    [N.A4,N.R,N.R,N.C5, N.D5,N.R,N.R,N.E5, N.R,N.R,N.D5,N.R, N.C5,N.R,N.R,N.R],
+              harmony: [N.E4,N.R,N.R,N.R, N.A4,N.R,N.R,N.R, N.R,N.R,N.A4,N.R, N.A4,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.R,N.R,N.E3,N.R, N.A3,N.R,N.R,N.R, N.R,N.R,N.E3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','H', '.','.','.','.'] },
+            { lead:    [N.E5,N.R,N.R,N.R, N.D5,N.R,N.R,N.C5, N.R,N.R,N.A4,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.C5,N.R,N.R,N.R, N.A4,N.R,N.R,N.A4, N.R,N.R,N.E4,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.C3,N.R,N.R,N.R, N.D3,N.R,N.R,N.R, N.A3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','H', '.','.','.','.'] },
+            { lead:    [N.A4,N.R,N.R,N.C5, N.D5,N.R,N.R,N.E5, N.G5,N.R,N.R,N.E5, N.D5,N.R,N.R,N.R],
+              harmony: [N.R,N.R,N.R,N.A4, N.A4,N.R,N.R,N.C5, N.E5,N.R,N.R,N.C5, N.A4,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.D3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.R,N.R,N.A3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','H', '.','.','.','.'] },
+            { lead:    [N.E5,N.R,N.R,N.D5, N.R,N.R,N.C5,N.R, N.D5,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.C5,N.R,N.R,N.A4, N.R,N.R,N.A4,N.R, N.A4,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.C3,N.R,N.R,N.R, N.G3,N.R,N.R,N.R, N.A3,N.R,N.R,N.R, N.E3,N.R,N.A3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','.',  '.','.','K','.'] },
+          ]},
+          // === SECTION B (variation - slightly more motion, still graceful) ===
+          { name: 'B', bars: [
+            { lead:    [N.E5,N.R,N.R,N.G5, N.R,N.R,N.E5,N.R, N.D5,N.R,N.R,N.C5, N.R,N.R,N.D5,N.R],
+              harmony: [N.C5,N.R,N.R,N.E5, N.R,N.R,N.C5,N.R, N.A4,N.R,N.R,N.A4, N.R,N.R,N.A4,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.D3,N.R,N.R,N.R, N.R,N.R,N.A3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','H', '.','.','.','.'] },
+            { lead:    [N.E5,N.R,N.R,N.R, N.G5,N.R,N.R,N.A5, N.R,N.R,N.G5,N.R, N.E5,N.R,N.R,N.R],
+              harmony: [N.C5,N.R,N.R,N.R, N.E5,N.R,N.R,N.E5, N.R,N.R,N.E5,N.R, N.C5,N.R,N.R,N.R],
+              bass:    [N.C3,N.R,N.R,N.R, N.R,N.R,N.E3,N.R, N.A3,N.R,N.R,N.R, N.R,N.R,N.E3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','H', '.','.','.','.'] },
+            { lead:    [N.A5,N.R,N.R,N.G5, N.R,N.R,N.E5,N.R, N.D5,N.R,N.R,N.E5, N.R,N.R,N.R,N.R],
+              harmony: [N.E5,N.R,N.R,N.E5, N.R,N.R,N.C5,N.R, N.A4,N.R,N.R,N.C5, N.R,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.G3,N.R,N.R,N.R, N.D3,N.R,N.R,N.R, N.A3,N.R,N.E3,N.R],
+              drums:   ['K','.','.','H', '.','.','.','.', 'S','.','.','.',  '.','.','K','.'] },
+          ]},
+          // === BRIDGE (sparse, contemplative pause) ===
+          { name: 'bridge', bars: [
+            { lead:    [N.A5,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.G5,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.E5,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.E5,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              drums:   ['K','.','.','.', '.','.','.','.', '.','.','.','.', '.','.','.','.'] },
+            { lead:    [N.E5,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.D5,N.R,N.R,N.E5, N.R,N.R,N.R,N.R],
+              harmony: [N.C5,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.A4,N.R,N.R,N.C5, N.R,N.R,N.R,N.R],
+              bass:    [N.C3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.A3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R],
+              drums:   ['.','.','.','.', '.','.','.','.', 'K','.','.','.', '.','.','.','.'] },
+          ]},
         ],
-        tempo: 500,
-        instrument: 'gayageum',
+        order: [0, 1, 2, 1, 3, 1, 2, 3],
       },
+
+      // ---- GAME BGM: Focused strategic thinking ----
+      // Tighter, more driving than menu. Steady pulse keeps tension.
+      // Key: E minor pentatonic (E G A B D), BPM 110
       game: {
-        patterns: [
-          // Contemplative daegeum melody
-          [392, 0, 440, 392, 329.6, 0, 293.7, 261.6],
-          [261.6, 0, 329.6, 392, 440, 0, 523.3, 440],
-          [349.2, 329.6, 0, 293.7, 261.6, 0, 329.6, 0],
-          [440, 0, 392, 0, 329.6, 293.7, 261.6, 0],
-          [293.7, 329.6, 392, 0, 440, 392, 329.6, 0],
+        bpm: 110,
+        sections: [
+          // === SECTION A (steady focus - thinking rhythm) ===
+          { name: 'A', bars: [
+            { lead:    [N.E5,N.R,N.R,N.R, N.G5,N.R,N.R,N.A5, N.R,N.R,N.G5,N.R, N.E5,N.R,N.R,N.R],
+              harmony: [N.B4,N.R,N.R,N.R, N.R,N.R,N.R,N.E5, N.R,N.R,N.R,N.R, N.B4,N.R,N.R,N.R],
+              bass:    [N.E3,N.R,N.R,N.E3, N.R,N.R,N.E3,N.R, N.E3,N.R,N.R,N.E3, N.R,N.R,N.B3,N.R],
+              drums:   ['K','.','H','.', 'S','.','H','.', 'K','.','H','.', 'S','.','H','.'] },
+            { lead:    [N.D5,N.R,N.R,N.E5, N.R,N.R,N.G5,N.R, N.A5,N.R,N.R,N.G5, N.R,N.R,N.R,N.R],
+              harmony: [N.R,N.R,N.R,N.B4, N.R,N.R,N.E5,N.R, N.E5,N.R,N.R,N.E5, N.R,N.R,N.R,N.R],
+              bass:    [N.D3,N.R,N.R,N.D3, N.R,N.R,N.A3,N.R, N.A3,N.R,N.R,N.E3, N.R,N.R,N.E3,N.R],
+              drums:   ['K','.','H','.', 'S','.','H','.', 'K','.','H','.', 'S','.','.','.'] },
+            { lead:    [N.B5,N.R,N.R,N.A5, N.R,N.R,N.G5,N.R, N.E5,N.R,N.R,N.D5, N.E5,N.R,N.R,N.R],
+              harmony: [N.G5,N.R,N.R,N.E5, N.R,N.R,N.E5,N.R, N.B4,N.R,N.R,N.R, N.B4,N.R,N.R,N.R],
+              bass:    [N.E3,N.R,N.R,N.A3, N.R,N.R,N.E3,N.R, N.E3,N.R,N.R,N.D3, N.R,N.R,N.E3,N.R],
+              drums:   ['K','.','H','.', 'S','.','H','.', 'K','.','H','.', 'S','.','H','.'] },
+            { lead:    [N.G5,N.R,N.R,N.A5, N.R,N.R,N.G5,N.R, N.E5,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.E5,N.R,N.R,N.E5, N.R,N.R,N.E5,N.R, N.B4,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.G3,N.R,N.R,N.A3, N.R,N.R,N.E3,N.R, N.E3,N.R,N.R,N.R, N.B3,N.R,N.E3,N.R],
+              drums:   ['K','.','H','.', 'S','.','H','.', 'K','.','.','.', 'S','.','.','K'] },
+          ]},
+          // === SECTION B (rising tension - opponent is strong) ===
+          { name: 'B', bars: [
+            { lead:    [N.E5,N.R,N.G5,N.R, N.A5,N.R,N.R,N.B5, N.R,N.R,N.A5,N.R, N.G5,N.R,N.E5,N.R],
+              harmony: [N.B4,N.R,N.E5,N.R, N.E5,N.R,N.R,N.G5, N.R,N.R,N.E5,N.R, N.E5,N.R,N.B4,N.R],
+              bass:    [N.E3,N.R,N.E3,N.R, N.A3,N.R,N.R,N.E3, N.R,N.R,N.A3,N.R, N.E3,N.R,N.E3,N.R],
+              drums:   ['K','.','H','H', 'S','.','K','H', 'K','.','H','H', 'S','.','K','.'] },
+            { lead:    [N.B5,N.R,N.R,N.A5, N.G5,N.R,N.R,N.E5, N.D5,N.R,N.R,N.E5, N.G5,N.R,N.R,N.R],
+              harmony: [N.G5,N.R,N.R,N.E5, N.E5,N.R,N.R,N.B4, N.R,N.R,N.R,N.B4, N.E5,N.R,N.R,N.R],
+              bass:    [N.E3,N.R,N.R,N.A3, N.E3,N.R,N.R,N.E3, N.D3,N.R,N.R,N.E3, N.R,N.R,N.B3,N.E3],
+              drums:   ['K','.','H','H', 'S','.','K','H', 'K','.','H','H', 'S','.','K','S'] },
+            { lead:    [N.A5,N.R,N.R,N.B5, N.R,N.R,N.A5,N.G5, N.E5,N.R,N.R,N.R, N.D5,N.R,N.E5,N.R],
+              harmony: [N.E5,N.R,N.R,N.G5, N.R,N.R,N.E5,N.E5, N.B4,N.R,N.R,N.R, N.R,N.R,N.B4,N.R],
+              bass:    [N.A3,N.R,N.R,N.E3, N.R,N.R,N.A3,N.R, N.E3,N.R,N.R,N.R, N.D3,N.R,N.E3,N.R],
+              drums:   ['K','.','H','H', 'S','.','K','H', 'K','.','H','.', 'S','.','.','.'] },
+          ]},
+          // === SECTION C (climax - decisive moment) ===
+          { name: 'C', bars: [
+            { lead:    [N.B5,N.R,N.R,N.A5, N.R,N.R,N.B5,N.R, N.R,N.R,N.A5,N.R, N.G5,N.R,N.A5,N.R],
+              harmony: [N.G5,N.R,N.R,N.E5, N.R,N.R,N.G5,N.R, N.R,N.R,N.E5,N.R, N.E5,N.R,N.E5,N.R],
+              bass:    [N.E3,N.R,N.E3,N.R, N.R,N.R,N.E3,N.R, N.A3,N.R,N.R,N.R, N.E3,N.R,N.A3,N.R],
+              drums:   ['K','.','H','H', 'S','.','K','H', 'K','.','H','H', 'S','.','K','.'] },
+            { lead:    [N.E5,N.R,N.G5,N.A5, N.B5,N.R,N.R,N.R, N.A5,N.R,N.R,N.G5, N.E5,N.R,N.R,N.R],
+              harmony: [N.B4,N.R,N.E5,N.E5, N.G5,N.R,N.R,N.R, N.E5,N.R,N.R,N.E5, N.B4,N.R,N.R,N.R],
+              bass:    [N.A3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.A3,N.R,N.R,N.E3, N.R,N.R,N.E3,N.R],
+              drums:   ['K','.','H','H', 'S','.','K','H', 'K','.','H','.', 'S','.','.','K'] },
+          ]},
+          // === BRIDGE (momentary calm before next wave) ===
+          { name: 'bridge', bars: [
+            { lead:    [N.E5,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.D5,N.R,N.R,N.R, N.E5,N.R,N.R,N.R],
+              harmony: [N.B4,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.B4,N.R,N.R,N.R],
+              bass:    [N.E3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.D3,N.R,N.R,N.R, N.E3,N.R,N.R,N.R],
+              drums:   ['K','.','.','.', '.','.','.','.', 'S','.','.','.', '.','.','.','.'] },
+            { lead:    [N.G5,N.R,N.R,N.R, N.R,N.R,N.E5,N.R, N.R,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              harmony: [N.E5,N.R,N.R,N.R, N.R,N.R,N.B4,N.R, N.R,N.R,N.R,N.R, N.R,N.R,N.R,N.R],
+              bass:    [N.E3,N.R,N.R,N.R, N.R,N.R,N.R,N.R, N.E3,N.R,N.R,N.R, N.B3,N.R,N.E3,N.R],
+              drums:   ['K','.','.','.', '.','.','.','.', '.','.','.','.', 'K','.','.','.'] },
+          ]},
         ],
-        bassPatterns: [
-          [130.8, 0, 0, 0, 146.8, 0, 0, 0],
-          [164.8, 0, 0, 0, 130.8, 0, 0, 0],
-          [146.8, 0, 0, 0, 130.8, 0, 0, 0],
-          [164.8, 0, 0, 0, 196, 0, 130.8, 0],
-          [130.8, 0, 0, 0, 164.8, 0, 0, 0],
-        ],
-        tempo: 550,
-        instrument: 'daegeum',
+        order: [0, 1, 0, 2, 3, 0, 1, 2, 3],
       }
     };
 
-    let bgmState = { patternIdx: 0, noteIdx: 0 };
+    let bgmState = { sectionOrderIdx: 0, barIdx: 0, stepIdx: 0, scheduledUntil: 0 };
+    let bgmSchedulerTimer = null;
+
+    let bgmTransitionTimer = null;
 
     function startBGM(trackName) {
       if (!bgmEnabled) return;
       if (currentBGMTrack === trackName) return;
 
-      stopBGM();
+      // If another track is already playing, fade out first then start new one
+      if (currentBGMTrack !== null) {
+        fadeOutAndStartBGM(trackName);
+        return;
+      }
+
+      _startBGMImmediate(trackName);
+    }
+
+    function fadeOutAndStartBGM(trackName) {
+      if (bgmTransitionTimer) { clearTimeout(bgmTransitionTimer); bgmTransitionTimer = null; }
+
+      const ctx = getAudioCtx();
+      const fadeDur = 0.6; // seconds fade-out
+      const silenceGap = 400; // ms of silence between tracks
+
+      // Smooth fade-out via gain ramp
+      bgmGain.gain.setValueAtTime(bgmGain.gain.value, ctx.currentTime);
+      bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + fadeDur);
+
+      // After fade completes, stop old track, wait silence gap, then start new
+      bgmTransitionTimer = setTimeout(() => {
+        stopBGM();
+        bgmTransitionTimer = setTimeout(() => {
+          bgmTransitionTimer = null;
+          _startBGMImmediate(trackName);
+        }, silenceGap);
+      }, fadeDur * 1000);
+    }
+
+    function _startBGMImmediate(trackName) {
+      if (!bgmEnabled) return;
+
       currentBGMTrack = trackName;
       const track = BGM_TRACKS[trackName];
       if (!track) return;
 
       const ctx = getAudioCtx();
-      bgmGain.gain.value = bgmVolume;
+      bgmGain.gain.setValueAtTime(bgmVolume, ctx.currentTime);
 
-      // Random start pattern
-      bgmState.patternIdx = Math.floor(Math.random() * track.patterns.length);
-      bgmState.noteIdx = 0;
+      // Reset state
+      bgmState.sectionOrderIdx = 0;
+      bgmState.barIdx = 0;
+      bgmState.stepIdx = 0;
 
-      bgmInterval = setInterval(() => {
-        if (!bgmEnabled) { stopBGM(); return; }
+      const stepDur = 60 / track.bpm / 4; // 16th note duration
+      bgmState.scheduledUntil = ctx.currentTime + 0.05;
 
-        const pattern = track.patterns[bgmState.patternIdx];
-        const freq = pattern[bgmState.noteIdx];
+      // Schedule-ahead approach for tight timing (like real NES hardware)
+      const scheduleAhead = 0.15; // seconds to schedule ahead
+      const schedulerInterval = 50; // ms between scheduler calls
 
-        if (freq > 0) {
-          if (track.instrument === 'gayageum') {
-            playGayageum(ctx, freq, ctx.currentTime, track.tempo / 1000 * 1.5);
-          } else if (track.instrument === 'daegeum') {
-            playDaegeum(ctx, freq, ctx.currentTime, track.tempo / 1000 * 1.8);
+      function scheduler() {
+        if (!bgmEnabled || currentBGMTrack !== trackName) { stopBGM(); return; }
+        const ct = getAudioCtx().currentTime;
+
+        while (bgmState.scheduledUntil < ct + scheduleAhead) {
+          const section = track.sections[track.order[bgmState.sectionOrderIdx]];
+          const bar = section.bars[bgmState.barIdx];
+          const step = bgmState.stepIdx;
+          const t = bgmState.scheduledUntil;
+
+          // Lead (Pulse 1)
+          const leadFreq = bar.lead[step];
+          if (leadFreq > 0) {
+            playPulse1(ctx, leadFreq, t, stepDur * 1.8, 0.08);
           }
-        }
 
-        // Bass for game track
-        if (track.bassPatterns) {
-          const bassFreq = track.bassPatterns[bgmState.patternIdx][bgmState.noteIdx];
+          // Harmony (Pulse 2)
+          const harmFreq = bar.harmony[step];
+          if (harmFreq > 0) {
+            playPulse2(ctx, harmFreq, t, stepDur * 1.5, 0.05);
+          }
+
+          // Bass (Triangle)
+          const bassFreq = bar.bass[step];
           if (bassFreq > 0) {
-            playGeomungo(ctx, bassFreq, ctx.currentTime, track.tempo / 1000 * 2);
+            playTriBass(ctx, bassFreq, t, stepDur * 1.8);
+          }
+
+          // Drums (Noise)
+          const drum = bar.drums[step];
+          if (drum === 'K') playNoiseDrum(ctx, 'kick', t, 0.06);
+          else if (drum === 'S') playNoiseDrum(ctx, 'snare', t, 0.06);
+          else if (drum === 'H') playNoiseDrum(ctx, 'hat', t, 0.04);
+
+          // Advance step
+          bgmState.scheduledUntil += stepDur;
+          bgmState.stepIdx++;
+
+          if (bgmState.stepIdx >= 16) {
+            bgmState.stepIdx = 0;
+            bgmState.barIdx++;
+
+            if (bgmState.barIdx >= section.bars.length) {
+              bgmState.barIdx = 0;
+              bgmState.sectionOrderIdx = (bgmState.sectionOrderIdx + 1) % track.order.length;
+            }
           }
         }
+      }
 
-        bgmState.noteIdx++;
-        if (bgmState.noteIdx >= pattern.length) {
-          bgmState.noteIdx = 0;
-          bgmState.patternIdx = (bgmState.patternIdx + 1) % track.patterns.length;
-        }
-      }, track.tempo);
+      scheduler(); // Initial fill
+      bgmSchedulerTimer = setInterval(scheduler, schedulerInterval);
+      bgmInterval = bgmSchedulerTimer; // Keep compatibility with existing stop logic
     }
 
     function stopBGM() {
+      if (bgmTransitionTimer) {
+        clearTimeout(bgmTransitionTimer);
+        bgmTransitionTimer = null;
+      }
       if (bgmInterval) {
         clearInterval(bgmInterval);
         bgmInterval = null;
       }
+      if (bgmSchedulerTimer) {
+        clearInterval(bgmSchedulerTimer);
+        bgmSchedulerTimer = null;
+      }
       currentBGMTrack = null;
-    }
-
-    // --- Instrument Synthesis ---
-    function playGayageum(ctx, freq, time, duration) {
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const g = ctx.createGain();
-
-      osc1.type = 'triangle';
-      osc1.frequency.setValueAtTime(freq, time);
-      osc1.frequency.linearRampToValueAtTime(freq * 0.997, time + duration);
-
-      osc2.type = 'sine';
-      osc2.frequency.value = freq * 2;
-
-      g.gain.setValueAtTime(0, time);
-      g.gain.linearRampToValueAtTime(0.12, time + 0.02);
-      g.gain.setValueAtTime(0.12, time + 0.05);
-      g.gain.exponentialRampToValueAtTime(0.04, time + duration * 0.4);
-      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      const merge = ctx.createGain();
-      merge.gain.value = 1;
-
-      const harmGain = ctx.createGain();
-      harmGain.gain.value = 0.12;
-
-      osc1.connect(merge);
-      osc2.connect(harmGain);
-      harmGain.connect(merge);
-      merge.connect(g);
-      g.connect(bgmGain);
-
-      osc1.start(time);
-      osc1.stop(time + duration + 0.1);
-      osc2.start(time);
-      osc2.stop(time + duration + 0.1);
-    }
-
-    function playGeomungo(ctx, freq, time, duration) {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-
-      g.gain.setValueAtTime(0, time);
-      g.gain.linearRampToValueAtTime(0.08, time + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.03, time + 0.15);
-      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      osc.connect(g);
-      g.connect(bgmGain);
-
-      osc.start(time);
-      osc.stop(time + duration + 0.1);
-    }
-
-    function playDaegeum(ctx, freq, time, duration) {
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const g = ctx.createGain();
-
-      // Main tone - sine for flute quality
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(freq, time);
-
-      // Add vibrato
-      const vibratoRate = 5;
-      const vibratoDepth = 3;
-      const lfo = ctx.createOscillator();
-      const lfoGain = ctx.createGain();
-      lfo.frequency.value = vibratoRate;
-      lfoGain.gain.value = vibratoDepth;
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc1.frequency);
-      lfo.start(time + 0.15); // Vibrato starts after initial attack
-      lfo.stop(time + duration + 0.1);
-
-      // Breathy overtone
-      osc2.type = 'sawtooth';
-      osc2.frequency.value = freq;
-
-      const breathGain = ctx.createGain();
-      breathGain.gain.value = 0.02;
-
-      g.gain.setValueAtTime(0, time);
-      g.gain.linearRampToValueAtTime(0.1, time + 0.1);
-      g.gain.setValueAtTime(0.1, time + duration * 0.3);
-      g.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
-      osc1.connect(g);
-      osc2.connect(breathGain);
-      breathGain.connect(g);
-      g.connect(bgmGain);
-
-      osc1.start(time);
-      osc1.stop(time + duration + 0.1);
-      osc2.start(time);
-      osc2.stop(time + duration + 0.1);
     }
 
     // ===== INIT ON LOAD =====
